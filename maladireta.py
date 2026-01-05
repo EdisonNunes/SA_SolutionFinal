@@ -26,7 +26,7 @@ def substituir_tags(paragrafo, tags: dict):
 # ======================================================
 # 2. Geração do documento Word
 # ======================================================
-def gerar_documento_pdf(
+def gerar_documento_word(
     supabase,
     id_proposta: int,
     caminho_template: str,
@@ -156,7 +156,7 @@ def gerar_documento_pdf(
         linha[3].text = item["prazo_ddl"]
         linha[4].text = str(int(qtd))
         linha[5].text = f"R$ {preco:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        linha[6].text = f"{desconto:.0f}%"
+        linha[6].text = f"{desconto:.2f}%"
         linha[7].text = f"R$ {total_item:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         # aplica fonte Arial 8
         for cel in linha:
@@ -193,4 +193,5 @@ def gerar_documento_pdf(
     
     doc.save('temp.docx')
 
-    return caminho_saida
+    # return caminho_saida
+    return 'temp.docx', proposta["num_proposta"]

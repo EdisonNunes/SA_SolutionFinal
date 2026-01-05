@@ -1,11 +1,14 @@
 import streamlit as st
-from crud import supabase,criar_proposta,atualizar_proposta,excluir_proposta,buscar_propostas,adicionar_item,buscar_itens,atualizar_item,excluir_item
+# from crud import supabase,criar_proposta,atualizar_proposta,excluir_proposta,buscar_propostas,adicionar_item,buscar_itens,atualizar_item,excluir_item
+from crud import *
 from utils import formatar_moeda_br
 from datetime import date, datetime
-from maladireta import gerar_documento_pdf
-from converte import converter_docx_para_pdf
+from maladireta import gerar_documento_word
+from converte import converter_docx_para_pdf, converter_para_pdf
 import tempfile
-
+import pandas as pd
+from cloudconvert.exceptions.exceptions import UnauthorizedAccess, ConnectionError
+import os
 
 CLOUDCONVERT_API_KEY = st.secrets["cloudconvert"]["CLOUDCONVERT_API_KEY"]
 
@@ -22,6 +25,27 @@ def proposta_existe(num_proposta: str) -> bool:
 
 def calcular_total_item(qtd, preco, desconto_pct):
     return (qtd * preco) - (preco * desconto_pct / 100)
+
+def gerar_proxima_proposta(last_proposta: str) -> str:
+    # Obter o ano atual do sistema
+    ano_atual = date.today().year
+    
+    try:
+        # Extrair o ano (YYYY) e o sequencial (NNN)
+        ano_lido = int(last_proposta[2:6])
+        sequencial_lido = int(last_proposta[6:])
+        
+        if ano_atual == ano_lido:
+            # Incrementa se for o mesmo ano
+            novo_sequencial = sequencial_lido + 1
+            return f"C-{ano_atual}{novo_sequencial:03d}"
+        else:
+            # Reinicia se o ano mudou
+            return f"C-{ano_atual}001"
+            
+    except (ValueError, IndexError):
+        # Fallback para formato inválido
+        return f"C-{ano_atual}001"
 
 # =========================================
 # DADOS AUXILIARES
@@ -44,52 +68,165 @@ if "itens_novos" not in st.session_state:
 # =========================================
 st.title("📄 Propostas Comerciais")
 
-aba = st.tabs(["➕ Nova Proposta", "🔎 Editar Proposta"])
+aba = st.tabs(["➕ Nova Proposta", "🔎 Editar Proposta / Gerar PDF"])
 
 # =========================================
 # ABA 1 – NOVA PROPOSTA
 # =========================================    
 with aba[0]:
-    st.subheader("Nova Proposta")
-
+    ultima_proposta = ler_last_proposta()
+    proxima_proposta = gerar_proxima_proposta(ultima_proposta)
+    st.subheader(f":orange[Proposta {proxima_proposta}]")
     col1, col2, col3 = st.columns(3)
 
 			  
     empresa = col1.selectbox("Cliente", map_clientes.keys(), key="nova_cliente")
     id_cliente = map_clientes[empresa]
 
-    num_proposta = col2.text_input("Número da Proposta", placeholder="Ex: C-2026001", key="nova_num_proposta")
-
-    data_emissao = col3.date_input("Data de Emissão", value=date.today(), key="nova_data_emissao", format="DD/MM/YYYY")
+    data_emissao = col2.date_input("Data de Emissão", value=date.today(), key="nova_data_emissao", format="DD/MM/YYYY")
+    validade = col3.text_input("Validade", placeholder="Exemplo : 15 DDL", key='nova_validade')
+    
     col4, col5, col6 = st.columns(3)
-
-    validade = col4.text_input("Validade", placeholder="15 DDL", key='nova_validade')
-    cond_pagamento = col5.text_input("Cond. Pagamento", placeholder="30 DDL", key='nova_cond_pagamento')
-    referencia = col6.text_input("Referência", key="nova_referencia")
+    
+    cond_pagamento = col4.text_input("Cond. Pagamento", placeholder="Exemplo : 30 DDL", key='nova_cond_pagamento')
+    referencia = col5.text_input("Referência", key="nova_referencia")
 
     st.divider()
     st.subheader("Itens da Proposta")
 
-    c1, c2, c3, c4 = st.columns(4)
+    # -------------------------------------------------------------
+    # 1) BUSCAR SERVIÇO (BUSCA GLOBAL)
+    # -------------------------------------------------------------
+    st.write("### 1. Buscar serviço")
+    busca_codigo = st.text_input(
+        "Digite qualquer parte do Código ou Descrição",
+        placeholder="Ex: SAS, CAL, REP...",
+        key="nova_busca_codigo_servico"
+    )
 
-    codigo_serv = c1.selectbox("Serviço", map_servicos.keys(), key="novo_item_servico")
-    serv = map_servicos[codigo_serv]
+    # Filtragem dos serviços com base na busca (Busca em todos os serviços)
+    if busca_codigo:
+        servicos_filtrados = [
+            s for s in servicos 
+            if busca_codigo.lower() in s["codigo"].lower() or busca_codigo.lower() in s["descricao"].lower()
+        ]
+    else:
+        servicos_filtrados = servicos
 
-    prazo = c2.text_input("Prazo (DDL)", placeholder="10", key="novo_item_prazo")
-    qtd = c3.number_input("Qtd", min_value=1, step=1, format='%d' ,key="novo_item_qtd")
-    desconto = c4.number_input("Desconto (%)", min_value=0, max_value= 100, value=0, key="novo_item_desconto")
+    # -------------------------------------------------------------
+    # 2) LÓGICA DE PAGINAÇÃO (Aplicada sobre os resultados filtrados)
+    # -------------------------------------------------------------
+    servicos_por_pagina = 10
+    if "pagina_serv_nova" not in st.session_state:
+        st.session_state.pagina_serv_nova = 1
 
-    if st.button("➕ Adicionar Item", key="btn_add_item"):
-        st.session_state.itens_novos.append({
-            "id_servico": serv["id_servico"],
-            "codigo_servico": serv["codigo"],
-            "descricao_servico": serv["descricao"],
-            "prazo_ddl": prazo,
-            "qtd": qtd,
-            "preco_unitario": float(serv["valor"]),
-            "desconto": desconto
-        })
-        st.rerun()
+    total_servicos = len(servicos_filtrados)
+    total_paginas = max(1, (total_servicos + servicos_por_pagina - 1) // servicos_por_pagina)
+
+    # Resetar para página 1 se a busca reduzir o número de páginas
+    if st.session_state.pagina_serv_nova > total_paginas:
+        st.session_state.pagina_serv_nova = 1
+
+    inicio = (st.session_state.pagina_serv_nova - 1) * servicos_por_pagina
+    fim = inicio + servicos_por_pagina
+
+    st.write(f"Mostrando códigos de {inicio + 1} a {min(fim, total_servicos)} do total de {total_servicos} registros")
+
+    # Fatiar a lista filtrada para exibição na página atual
+    servicos_exibidos = servicos_filtrados[inicio:fim]
+
+    # -------------------------------------------------------------
+    # 3) GRID COM COLUNA "SELECIONAR"
+    # -------------------------------------------------------------
+    st.write("### 2. Lista de Serviços")
+
+    if not servicos_exibidos:
+        st.warning("Nenhum serviço encontrado.")
+    else:
+        # Criando o DataFrame para exibição
+        df_exibicao = pd.DataFrame(servicos_exibidos)[["codigo", "descricao", "valor", "tipo"]]
+        
+        # Formatação do valor para exibição
+        df_exibicao["valor_formatado"] = df_exibicao["valor"].apply(
+            lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+        
+        # Adicionando a coluna visual "Selecionar"
+        #df_exibicao["Selecionar"] = "🔘"
+        df_exibicao["Selecionar"] = ""
+        
+        cols = ["Selecionar", "codigo", "descricao", "valor_formatado", "tipo"]
+        
+        # Exibição do Grid
+        selecao = st.dataframe(
+            df_exibicao[cols],
+            hide_index=True,
+            width='content',
+            column_config={
+                "Selecionar": st.column_config.TextColumn("Selecionar", help="Clique na linha para selecionar"),
+                "codigo": st.column_config.TextColumn("Código"),
+                "descricao": st.column_config.TextColumn("Descrição"),
+                "valor_formatado": st.column_config.TextColumn("Valor(R$)"),
+                "tipo": st.column_config.TextColumn("Tipo"),
+            },
+            selection_mode="single-row",
+            on_select="rerun"
+        )
+
+        # Controles de Navegação da Paginação
+        col_pag1, col_pag2, col_pag3 = st.columns([1, 2, 1])
+        
+        if col_pag1.button("⬅️", key="nova_pg_prev", disabled=st.session_state.pagina_serv_nova <= 1):
+            st.session_state.pagina_serv_nova -= 1
+            st.rerun()
+
+        col_pag2.write(f"Página {st.session_state.pagina_serv_nova} de {total_paginas}")
+
+        if col_pag3.button("➡️", key="nova_pg_next", disabled=st.session_state.pagina_serv_nova >= total_paginas):
+            st.session_state.pagina_serv_nova += 1
+            st.rerun()
+
+        # -------------------------------------------------------------
+        # 4, 5 e 6) LÓGICA DE SELEÇÃO E INPUTS
+        # -------------------------------------------------------------
+        indices_selecionados = selecao.get("selection", {}).get("rows", [])
+        
+        if indices_selecionados:
+            index = indices_selecionados[0]
+            # Importante: buscar no 'servicos_exibidos' pois o índice do grid refere-se à página atual
+            serv_selecionado = servicos_exibidos[index]
+
+            # Formatação do valor para exibição
+            preco_servico = formatar_moeda_br(float(serv_selecionado['valor']))
+            texto1 = f'{serv_selecionado['codigo']} :material/move_item: {serv_selecionado['descricao']}'
+            texto2 = f'Valor : R$ {preco_servico}'
+            st.success(f'ITEM SELECIONADO \n###### :point_right: {texto1} \n###### :point_right: {texto2} ')
+
+
+
+            col_prazo, col_qtd, col_desc = st.columns([1.3, 1, 1])
+            
+            prazo = col_prazo.text_input("Prazo (DDL)", key="novo_item_prazo", placeholder='Exemplo : 10 DDL')
+            if prazo and prazo.strip() and 'DDL' not in prazo:
+                prazo = prazo + ' DDL'
+
+            
+            qtd = col_qtd.number_input("Quantidade", min_value=1, step=1, format='%d', key="novo_item_qtd")
+            desconto = col_desc.number_input("Desconto (%)", min_value=0, max_value=100, value=0, key="novo_item_desconto")
+            
+            if st.button("➕ Adicionar Item", key="btn_add_item"):
+                st.session_state.itens_novos.append({
+                    "id_servico": serv_selecionado["id_servico"],
+                    "codigo_servico": serv_selecionado["codigo"],
+                    "descricao_servico": serv_selecionado["descricao"],
+                    "prazo_ddl": prazo,
+                    "qtd": qtd,
+                    "preco_unitario": float(serv_selecionado["valor"]),
+                    "desconto": desconto
+                })
+                st.rerun()
+        else:
+            st.info("Clique em uma linha da tabela acima para selecionar o serviço.")
 
     # ==============================
     # VISUALIZAÇÃO DOS ITENS
@@ -112,15 +249,13 @@ with aba[0]:
             total_proposta += total_item
 
             col1, col2, col3, col4, col5, col6 = st.columns(
-                [0.7, 2, 5, 1.5, 1, 1.5]
-            )
+                [0.2, 0.8, 2.2, 0.4, 0.2, 0.7])
 
-            col1.write(idx)
+            col1.write(str(idx))
             col2.write(item["codigo_servico"])
             col3.write(item["descricao_servico"])
             col4.write(item["prazo_ddl"])
-            col5.write(item["qtd"])
-            #col6.write(f"R$ {total_item:,.2f}")
+            col5.write(str(item["qtd"]))
             col6.write(f"R$ {formatar_moeda_br(total_item)}")
 
             if col6.button("🗑", key=f"del_temp_{idx}"):
@@ -133,23 +268,30 @@ with aba[0]:
         # =========================
         # Validações
         # =========================
-        if not num_proposta.strip():
+        if not proxima_proposta.strip():
             st.error("❌ O número da proposta deve ser informado.")
             st.stop()
 
-        if proposta_existe(num_proposta.strip()):
-            st.error(f"❌ Já existe uma proposta com o número '{num_proposta}'.")
+        if proposta_existe(proxima_proposta.strip()):
+            st.error(f"❌ Já existe uma proposta com o número '{proxima_proposta}'.")
             st.stop()
 
         if not st.session_state.itens_novos:
             st.error("❌ A proposta deve conter pelo menos um item.")
             st.stop()
+
+        if validade and validade.strip() and 'DDL' not in validade:
+            validade = validade + ' DDL'
+    
+        if cond_pagamento and cond_pagamento.strip() and 'DDL' not in cond_pagamento:
+            cond_pagamento = cond_pagamento + ' DDL'
+
         # =========================
         # Criar proposta
         # =========================
         id_prop = criar_proposta({
             "id_cliente": id_cliente,
-            "num_proposta": num_proposta,
+            "num_proposta": proxima_proposta,
             "data_emissao": data_emissao.isoformat(), # ✅ YYYY-MM-DD
             "validade": validade,
             "cond_pagamento": cond_pagamento,
@@ -159,6 +301,12 @@ with aba[0]:
         for item in st.session_state.itens_novos:
             adicionar_item(id_prop, item)
 
+        atualizar_last_proposta(proxima_proposta)   # Atualiza número da proposta na tabela
+
+        num_proposta = ''
+        validade = ''
+        cond_pagamento = ''
+        referencia = ''
         st.success(f"✅ Proposta criada com ID {id_prop}")
         st.session_state.itens_novos = []
         st.rerun()
@@ -220,7 +368,7 @@ with aba[1]:
         st.session_state.edit_cond_pagamento = proposta_sel.get("cond_pagamento", "")
 
     id_prop = proposta_sel["id_proposta"]
-
+    num_proposta = proposta_sel["num_proposta"]
     st.divider()
     st.subheader("Dados da Proposta")
 
@@ -241,28 +389,54 @@ with aba[1]:
     # BOTÃO GERAR WORD
     # -----------------------------------
     if not st.session_state.edit_mode:
-        if col_btn2.button("📄 Gerar PDF", key="btn_word"):    
-            caminho_template = "matriz.docx"
-            # ===============================
-            # ARQUIVO TEMPORÁRIO
-            # ===============================
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
-            caminho_saida = f"Proposta_{proposta_sel['num_proposta']}.pdf",
+        texto_help = f'Gera PDF da proposta {num_proposta}'
+        if col_btn2.button("📄 Gerar PDF", key="btn_word", help=texto_help):    
+            erro = False
+            temp_docx = None
+            proposta_name = f'Proposta_{num_proposta}'
+            try: 
+               # 1. Gerar DOCX temporário  
+               with st.spinner('Gerando documento ...', show_time=True):
+                    temp_docx, proposta_name = gerar_documento_word(supabase=supabase,
+                                        id_proposta= id_prop,
+                                        caminho_template='matriz.docx',
+                                        caminho_saida=num_proposta
+                                        )
+                    # 2. Converter para PDF 
+                    #print("Convertendo para PDF via CloudConvert...")
+                    pdf_bytes = converter_para_pdf(temp_docx)
 
-            gerar_documento_pdf(supabase, id_prop, caminho_template, caminho_saida)
+                # 3. Disponibilizar para Download
+                    st.download_button(
+                        label="Clique aqui para baixar o PDF",
+                        data=pdf_bytes,
+                        file_name=f"Proposta_{proposta_name}.pdf",
+                        mime="application/pdf"
+                    )
 
-            # Exemplo de uso:
-            converter_docx_para_pdf(CLOUDCONVERT_API_KEY, docx_file='temp.docx',pdf_file=caminho_saida)
-
-
-            with open(caminho_saida, "rb") as f:
-                st.download_button(
-                    "⬇ Baixar documento Word",
-                    f,
-                    file_name=f"Proposta_{proposta_sel['num_proposta']}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
-    else:
+            except UnauthorizedAccess:
+                st.error("Erro de API: Chave do CloudConvert inválida ou e-mail não verificado.", icon="🚨")
+                erro = True
+            except Exception as e:
+                st.error(f"Erro Inesperado: {str(e)}", icon="🚨")
+                erro = True
+            finally:
+                # 4. Tratamento dos arquivos temporários
+                if temp_docx and os.path.exists(temp_docx):
+                    if not erro:
+                        # Se deu tudo certo, apaga o Word
+                        os.remove(temp_docx)
+                    else:
+                        # Se houve erro, oferece o download do WORD como alternativa
+                       st.warning(f'Baixe o arquivo Proposta_{proposta_name}.docx e faça a conversão para PDF no site : https://cloudconvert.com/ ')
+                       with open(temp_docx, "rb") as file:
+                            btn_docx = st.download_button(
+                                label=f"📥 Baixar  Proposta_{proposta_name}.docx",
+                                data=file,
+                                file_name=f"Proposta_{proposta_name}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+    else:            
         col_btn2.button("📄 Gerar PDF", key="btn_word_disabled", disabled=True)        
     # -------------------------------
     # CAMPOS DA PROPOSTA

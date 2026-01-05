@@ -46,7 +46,7 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 pg = st.navigation(
     {              
         'SA SOLUTION':[st.Page('homepage.py',   title='Home',               icon=':material/filter_alt:')],
-        'Propostas': [st.Page('propostaManu.py',    title='Proposta Comercial', icon=':material/amend:')], 
+        'Propostas': [st.Page('proposta.py',    title='Proposta Comercial', icon=':material/amend:')], 
         'Gerenciar Relatórios':  [
                        st.Page('compatquimica.py',      title='Compatibilidade Química',    icon=':material/thumb_up:'),
                        st.Page('pontobolha.py',     title='Ponto de Bolha',             icon=':material/thumb_up:'),

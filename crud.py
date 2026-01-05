@@ -384,3 +384,34 @@ def buscar_itens(id_proposta: int):
         .execute()
         .data
     )
+# create table public.sequencia (
+#   id bigint not null,
+#   last_proposta text not null,
+#   constraint sequencia_pkey primary key (id)
+# ) TABLESPACE pg_default;
+def ler_last_proposta() -> str:
+    """
+    Lê o campo 'last_proposta' do registro com id=1 na tabela 'sequencia'.
+    """
+    try:
+        response = supabase.table("sequencia").select("last_proposta").eq("id", 1).execute()
+        
+        if response.data:
+            return response.data[0]["last_proposta"]
+        else:
+            # Caso a tabela esteja vazia, retorna um valor padrão ou levanta erro
+            return "C-2026001" 
+    except Exception as e:
+        st.error(f"Erro ao ler do Supabase: {e}")
+        return None
+    
+def atualizar_last_proposta(nova_proposta: str):
+    """
+    Atualiza o campo 'last_proposta' do registro com id=1 na tabela 'sequencia'.
+    """
+    try:
+        response = supabase.table("sequencia").update({"last_proposta": nova_proposta}).eq("id", 1).execute()
+        return response
+    except Exception as e:
+        st.error(f"Erro ao atualizar o Supabase: {e}")
+        return None    
