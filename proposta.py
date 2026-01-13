@@ -57,6 +57,136 @@ map_clientes = {c["empresa"]: c["id"] for c in clientes}
 map_servicos = {s["codigo"]: s for s in servicos}
 
 # =========================================
+# FUNÇÕES REUTILIZÁVEIS
+# =========================================
+def exibir_busca_servicos(key_suffix, on_add_callback):
+    """
+    Exibe a interface de busca, paginação e seleção de serviços.
+    
+    Args:
+        key_suffix (str): Sufixo para as chaves dos widgets do Streamlit (ex: "_nova", "_edit").
+        on_add_callback (func): Função callback chamada quando o usuário clica em "Adicionar Item".
+                                Recebe um dicionário com os dados do item.
+    """
+    # 1) BUSCAR SERVIÇO (BUSCA GLOBAL)
+    st.write("### 1. Buscar serviço")
+    busca_codigo = st.text_input(
+        "Digite qualquer parte do Código ou Descrição",
+        placeholder="Ex: SAS, CAL, REP...",
+        key=f"busca_codigo_servico{key_suffix}"
+    )
+
+    # Filtragem dos serviços
+    if busca_codigo:
+        servicos_filtrados = [
+            s for s in servicos 
+            if busca_codigo.lower() in s["codigo"].lower() or busca_codigo.lower() in s["descricao"].lower()
+        ]
+    else:
+        servicos_filtrados = servicos
+
+    # 2) LÓGICA DE PAGINAÇÃO
+    servicos_por_pagina = 10
+    key_pagina = f"pagina_serv{key_suffix}"
+    
+    if key_pagina not in st.session_state:
+        st.session_state[key_pagina] = 1
+
+    total_servicos = len(servicos_filtrados)
+    total_paginas = max(1, (total_servicos + servicos_por_pagina - 1) // servicos_por_pagina)
+
+    if st.session_state[key_pagina] > total_paginas:
+        st.session_state[key_pagina] = 1
+
+    inicio = (st.session_state[key_pagina] - 1) * servicos_por_pagina
+    fim = inicio + servicos_por_pagina
+
+    st.write(f"Mostrando códigos de {inicio + 1} a {min(fim, total_servicos)} do total de {total_servicos} registros")
+
+    servicos_exibidos = servicos_filtrados[inicio:fim]
+
+    # 3) GRID COM COLUNA "SELECIONAR"
+    st.write("### 2. Lista de Serviços")
+
+    if not servicos_exibidos:
+        st.warning("Nenhum serviço encontrado.")
+    else:
+        df_exibicao = pd.DataFrame(servicos_exibidos)[["codigo", "descricao", "valor", "tipo"]]
+        
+        df_exibicao["valor_formatado"] = df_exibicao["valor"].apply(
+            lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+        
+        df_exibicao["Selecionar"] = ""
+        
+        cols = ["Selecionar", "codigo", "descricao", "valor_formatado", "tipo"]
+        
+        selecao = st.dataframe(
+            df_exibicao[cols],
+            hide_index=True,
+            width='content',
+            column_config={
+                "Selecionar": st.column_config.TextColumn("Selecionar", help="Clique na linha para selecionar"),
+                "codigo": st.column_config.TextColumn("Código"),
+                "descricao": st.column_config.TextColumn("Descrição"),
+                "valor_formatado": st.column_config.TextColumn("Valor(R$)"),
+                "tipo": st.column_config.TextColumn("Tipo"),
+            },
+            selection_mode="single-row",
+            on_select="rerun",
+            key=f"grid_servicos{key_suffix}"
+        )
+
+        # Controles de Navegação
+        col_pag1, col_pag2, col_pag3 = st.columns([1, 2, 1])
+        
+        if col_pag1.button("⬅️", key=f"pg_prev{key_suffix}", disabled=st.session_state[key_pagina] <= 1):
+            st.session_state[key_pagina] -= 1
+            st.rerun()
+
+        col_pag2.write(f"Página {st.session_state[key_pagina]} de {total_paginas}")
+
+        if col_pag3.button("➡️", key=f"pg_next{key_suffix}", disabled=st.session_state[key_pagina] >= total_paginas):
+            st.session_state[key_pagina] += 1
+            st.rerun()
+
+        # 4, 5 e 6) LÓGICA DE SELEÇÃO E INPUTS
+        indices_selecionados = selecao.get("selection", {}).get("rows", [])
+        
+        if indices_selecionados:
+            index = indices_selecionados[0]
+            serv_selecionado = servicos_exibidos[index]
+
+            preco_servico = formatar_moeda_br(float(serv_selecionado['valor']))
+            texto1 = f"{serv_selecionado['codigo']} :material/move_item: {serv_selecionado['descricao']}"
+            texto2 = f"Valor : R$ {preco_servico}"
+            st.success(f'ITEM SELECIONADO \n###### :point_right: {texto1} \n###### :point_right: {texto2} ')
+
+            col_prazo, col_qtd, col_desc = st.columns([1.3, 1, 1])
+            
+            prazo = col_prazo.text_input("Prazo (DDL)", key=f"item_prazo{key_suffix}", placeholder='Exemplo : 10 DDL')
+            if prazo and prazo.strip() and 'DDL' not in prazo:
+                prazo = prazo + ' DDL'
+
+            qtd = col_qtd.number_input("Quantidade", min_value=1, step=1, format='%d', key=f"item_qtd{key_suffix}")
+            desconto = col_desc.number_input("Desconto (%)", min_value=0, max_value=100, value=0, key=f"item_desconto{key_suffix}")
+            
+            if st.button("➕ Adicionar Item", key=f"btn_add_item{key_suffix}"):
+                item_data = {
+                    "id_servico": serv_selecionado["id_servico"],
+                    "codigo_servico": serv_selecionado["codigo"],
+                    "descricao_servico": serv_selecionado["descricao"],
+                    "prazo_ddl": prazo,
+                    "qtd": qtd,
+                    "preco_unitario": float(serv_selecionado["valor"]),
+                    "desconto": desconto
+                }
+                on_add_callback(item_data)
+        else:
+            st.info("Clique em uma linha da tabela acima para selecionar o serviço.")
+
+
+# =========================================
 # ESTADO INICIAL
 # =========================================
 									 
@@ -89,144 +219,18 @@ with aba[0]:
     col4, col5, col6 = st.columns(3)
     
     cond_pagamento = col4.text_input("Cond. Pagamento", placeholder="Exemplo : 30 DDL", key='nova_cond_pagamento')
-    referencia = col5.text_input("Referência", key="nova_referencia")
+    # Retirada a pedido do Leandro referencia = col5.text_input("Referência", key="nova_referencia")
+    referencia = ''
 
     st.divider()
     st.subheader("Itens da Proposta")
 
-    # -------------------------------------------------------------
-    # 1) BUSCAR SERVIÇO (BUSCA GLOBAL)
-    # -------------------------------------------------------------
-    st.write("### 1. Buscar serviço")
-    busca_codigo = st.text_input(
-        "Digite qualquer parte do Código ou Descrição",
-        placeholder="Ex: SAS, CAL, REP...",
-        key="nova_busca_codigo_servico"
-    )
+    # Função callback para Nova Proposta
+    def add_item_nova_proposta(item):
+        st.session_state.itens_novos.append(item)
+        st.rerun()
 
-    # Filtragem dos serviços com base na busca (Busca em todos os serviços)
-    if busca_codigo:
-        servicos_filtrados = [
-            s for s in servicos 
-            if busca_codigo.lower() in s["codigo"].lower() or busca_codigo.lower() in s["descricao"].lower()
-        ]
-    else:
-        servicos_filtrados = servicos
-
-    # -------------------------------------------------------------
-    # 2) LÓGICA DE PAGINAÇÃO (Aplicada sobre os resultados filtrados)
-    # -------------------------------------------------------------
-    servicos_por_pagina = 10
-    if "pagina_serv_nova" not in st.session_state:
-        st.session_state.pagina_serv_nova = 1
-
-    total_servicos = len(servicos_filtrados)
-    total_paginas = max(1, (total_servicos + servicos_por_pagina - 1) // servicos_por_pagina)
-
-    # Resetar para página 1 se a busca reduzir o número de páginas
-    if st.session_state.pagina_serv_nova > total_paginas:
-        st.session_state.pagina_serv_nova = 1
-
-    inicio = (st.session_state.pagina_serv_nova - 1) * servicos_por_pagina
-    fim = inicio + servicos_por_pagina
-
-    st.write(f"Mostrando códigos de {inicio + 1} a {min(fim, total_servicos)} do total de {total_servicos} registros")
-
-    # Fatiar a lista filtrada para exibição na página atual
-    servicos_exibidos = servicos_filtrados[inicio:fim]
-
-    # -------------------------------------------------------------
-    # 3) GRID COM COLUNA "SELECIONAR"
-    # -------------------------------------------------------------
-    st.write("### 2. Lista de Serviços")
-
-    if not servicos_exibidos:
-        st.warning("Nenhum serviço encontrado.")
-    else:
-        # Criando o DataFrame para exibição
-        df_exibicao = pd.DataFrame(servicos_exibidos)[["codigo", "descricao", "valor", "tipo"]]
-        
-        # Formatação do valor para exibição
-        df_exibicao["valor_formatado"] = df_exibicao["valor"].apply(
-            lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        )
-        
-        # Adicionando a coluna visual "Selecionar"
-        #df_exibicao["Selecionar"] = "🔘"
-        df_exibicao["Selecionar"] = ""
-        
-        cols = ["Selecionar", "codigo", "descricao", "valor_formatado", "tipo"]
-        
-        # Exibição do Grid
-        selecao = st.dataframe(
-            df_exibicao[cols],
-            hide_index=True,
-            width='content',
-            column_config={
-                "Selecionar": st.column_config.TextColumn("Selecionar", help="Clique na linha para selecionar"),
-                "codigo": st.column_config.TextColumn("Código"),
-                "descricao": st.column_config.TextColumn("Descrição"),
-                "valor_formatado": st.column_config.TextColumn("Valor(R$)"),
-                "tipo": st.column_config.TextColumn("Tipo"),
-            },
-            selection_mode="single-row",
-            on_select="rerun"
-        )
-
-        # Controles de Navegação da Paginação
-        col_pag1, col_pag2, col_pag3 = st.columns([1, 2, 1])
-        
-        if col_pag1.button("⬅️", key="nova_pg_prev", disabled=st.session_state.pagina_serv_nova <= 1):
-            st.session_state.pagina_serv_nova -= 1
-            st.rerun()
-
-        col_pag2.write(f"Página {st.session_state.pagina_serv_nova} de {total_paginas}")
-
-        if col_pag3.button("➡️", key="nova_pg_next", disabled=st.session_state.pagina_serv_nova >= total_paginas):
-            st.session_state.pagina_serv_nova += 1
-            st.rerun()
-
-        # -------------------------------------------------------------
-        # 4, 5 e 6) LÓGICA DE SELEÇÃO E INPUTS
-        # -------------------------------------------------------------
-        indices_selecionados = selecao.get("selection", {}).get("rows", [])
-        
-        if indices_selecionados:
-            index = indices_selecionados[0]
-            # Importante: buscar no 'servicos_exibidos' pois o índice do grid refere-se à página atual
-            serv_selecionado = servicos_exibidos[index]
-
-            # Formatação do valor para exibição
-            preco_servico = formatar_moeda_br(float(serv_selecionado['valor']))
-            texto1 = f'{serv_selecionado['codigo']} :material/move_item: {serv_selecionado['descricao']}'
-            texto2 = f'Valor : R$ {preco_servico}'
-            st.success(f'ITEM SELECIONADO \n###### :point_right: {texto1} \n###### :point_right: {texto2} ')
-
-
-
-            col_prazo, col_qtd, col_desc = st.columns([1.3, 1, 1])
-            
-            prazo = col_prazo.text_input("Prazo (DDL)", key="novo_item_prazo", placeholder='Exemplo : 10 DDL')
-            if prazo and prazo.strip() and 'DDL' not in prazo:
-                prazo = prazo + ' DDL'
-
-            
-            qtd = col_qtd.number_input("Quantidade", min_value=1, step=1, format='%d', key="novo_item_qtd")
-            desconto = col_desc.number_input("Desconto (%)", min_value=0, max_value=100, value=0, key="novo_item_desconto")
-            
-            if st.button("➕ Adicionar Item", key="btn_add_item"):
-                st.session_state.itens_novos.append({
-                    "id_servico": serv_selecionado["id_servico"],
-                    "codigo_servico": serv_selecionado["codigo"],
-                    "descricao_servico": serv_selecionado["descricao"],
-                    "prazo_ddl": prazo,
-                    "qtd": qtd,
-                    "preco_unitario": float(serv_selecionado["valor"]),
-                    "desconto": desconto
-                })
-                st.rerun()
-        else:
-            st.info("Clique em uma linha da tabela acima para selecionar o serviço.")
+    exibir_busca_servicos(key_suffix="_nova", on_add_callback=add_item_nova_proposta)
 
     # ==============================
     # VISUALIZAÇÃO DOS ITENS
@@ -441,26 +445,29 @@ with aba[1]:
     # -------------------------------
     # CAMPOS DA PROPOSTA
     # -------------------------------
-    nova_data_emissao = st.date_input(
+    col1, col2, col3 = st.columns(3)
+    nova_data_emissao = col1.date_input(
         "Data de Emissão",
         key="edit_data_emissao",
         format="DD/MM/YYYY",
         disabled=not st.session_state.edit_mode
     )
 
-    nova_ref = st.text_input(
-        "Referência",
-        key="edit_referencia",
-        disabled=not st.session_state.edit_mode
-    )
+    # Retirada a pedido do Leandro
+    # nova_ref = st.text_input(
+    #     "Referência",
+    #     key="edit_referencia",
+    #     disabled=not st.session_state.edit_mode
+    # )
+    nova_ref = ''
 
-    nova_validade = st.text_input(
+    nova_validade = col2.text_input(
         "Validade",
         key="edit_validade",
         disabled=not st.session_state.edit_mode
     )
 
-    nova_cond = st.text_input(
+    nova_cond = col3.text_input(
         "Cond. Pagamento",
         key="edit_cond_pagamento",
         disabled=not st.session_state.edit_mode
@@ -553,6 +560,34 @@ with aba[1]:
                         excluir_item(item["id_item_prop"])
                         st.warning("Item excluído")
                         st.rerun()
+    if st.session_state.edit_mode:
+        if "edit_adding_item" not in st.session_state:
+            st.session_state.edit_adding_item = False
 
+        if not st.session_state.edit_adding_item:
+            col_newitem, col_del1, col_back1 = st.columns([1,1,1])
+
+            if col_newitem.button("➕ Acrecentar Item na Proposta", key="edit_btn_newitem"):
+                st.session_state.edit_adding_item = True
+                st.rerun()
+        else:
+            st.divider()
+            st.subheader("Adicionar Novo Item")
+            
+            def add_item_edit_proposta(item):
+                # Remover chaves que não existem na tabela itens_proposta se necessário
+                # Mas o crud.adicionar_item espera chaves compatíveis. 
+                # O dicionário 'item' tem: id_servico, codigo_servico, descricao_servico, prazo_ddl, qtd, preco_unitario, desconto
+                
+                adicionar_item(id_prop, item)
+                st.success("Item adicionado com sucesso!")
+                st.session_state.edit_adding_item = False
+                st.rerun()
+
+            exibir_busca_servicos(key_suffix="_edit", on_add_callback=add_item_edit_proposta)
+            
+            if st.button("Cancelar Adição", key="btn_cancel_add_item"):
+                 st.session_state.edit_adding_item = False
+                 st.rerun()
     st.info(f"💰 Total da Proposta: R$ {formatar_moeda_br(total)}")
 

@@ -14,7 +14,7 @@ coluna_esquerda, coluna_direita = st.columns([1,1.5]) # Cria 2 colunas e a segun
 coluna_esquerda.title('SA SOLUTIONS')
 coluna_esquerda.markdown(":orange[Gerador de propostas comerciais]") 
 coluna_esquerda.markdown(":orange[Gerador de relatórios]") 
-coluna_esquerda.markdown(":blue-background[Versão 2.1]") 
+coluna_esquerda.markdown(":blue-background[Versão 2.2]") 
 if nome_usuario:
     coluna_esquerda.write(f'#### Bem vindo, {nome_usuario}')  # markdown
 

@@ -333,7 +333,8 @@ def buscar_propostas(filtro: str = ""):
         supabase
         .table("propostas")
         .select("*")
-        .order("data_emissao", desc=True)  # 🔥 ordem pela data (mais recente primeiro)
+        # .order("data_emissao", desc=True)  # 🔥 ordem pela data (mais recente primeiro)
+        .order("num_proposta", desc=True)  # 🔥 ordem pela data (mais recente primeiro)
         .order("id_proposta", desc=True)   # 🔒 desempate seguro
     )
     if filtro:
