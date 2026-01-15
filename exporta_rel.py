@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
-from data_loader import listar_registros, listar_todos_registros
+from crud import listar_registros, listar_todos_registros
 
-st.info("### Exportar Relatórios", icon=":material/file_export:")
+st.info("### Exportar Relatórios", icon=":material/csv:")
 
 registros = listar_registros(filtro_relatorio=st.session_state.get("ger_busca_relatorio", ""))
 df = pd.DataFrame(registros) if registros else pd.DataFrame()

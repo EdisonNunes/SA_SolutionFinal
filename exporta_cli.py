@@ -18,7 +18,7 @@ def listar_todos_dados_clientes_export():
     return response.data
 
 
-st.info("### Exportar Clientes", icon=":material/file_export:")
+st.info("### Exportar Clientes", icon=":material/csv:")
 
 clientes = listar_clientes_export(filtro_empresa=st.session_state.get("busca_empresa", ""))
 df = pd.DataFrame(clientes) if clientes else pd.DataFrame()
