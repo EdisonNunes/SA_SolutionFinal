@@ -5,7 +5,7 @@ import pandas as pd
 
 from crud import supabase,  listar_clientes, listar_todos_dados_clientes, incluir_cliente,excluir_cliente, alterar_cliente
 
-st.info(f'### Clientes Cadastrados',icon=':material/thumb_up:')
+st.info(f'### Clientes Cadastrados',icon=':material/groups:')
 
 # Inicializa session_state
 if "user" not in st.session_state:

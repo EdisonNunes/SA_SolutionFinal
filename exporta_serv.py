@@ -16,7 +16,7 @@ def listar_todos_servicos_export():
     return response.data
 
 
-st.info("### Exportar servicos", icon=":material/file_export:")
+st.info("### Exportar servicos", icon=":material/csv:")
 
 # servicos = listar_servicos_export(filtro_empresa=st.session_state.get("busca_codigo", ""))
 servicos = listar_servicos_export()

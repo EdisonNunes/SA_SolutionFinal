@@ -196,7 +196,8 @@ if "itens_novos" not in st.session_state:
 #=========================================
 # INTERFACE
 # =========================================
-st.title("📄 Propostas Comerciais")
+# st.title("📄 Propostas Comerciais")
+st.info("### Gerenciamento de Propostas Comerciais", icon=":material/amend:")
 
 aba = st.tabs(["➕ Nova Proposta", "🔎 Editar Proposta / Gerar PDF"])
 
