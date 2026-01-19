@@ -218,7 +218,7 @@ def ShowRelatorio(novos_dados):
     dict_ret = {}
     col1, col2, col3 = st.columns([1, 4, 1])  # col2 maior, centralizada
     with col2:
-        st.info('## :point_right:   Prévia  dos  Resultados')
+        st.info('## 👉   Prévia  dos  Resultados')
 
     
     # ------------------------- % Variação de Peso ------------------------------------- 
@@ -452,7 +452,7 @@ if st.session_state.ger_aba == "Incluir":
                     st.rerun()
             else:
                 message, etapa = ShowErro(erro)
-                st.warning(f' ##### Campo :point_right: {message} :warning: INVÁLIDO !  :mag_right: ETAPA :point_right: {etapa}')
+                st.warning(f' ##### Campo 👉 {message} :warning: INVÁLIDO !  :mag_right: ETAPA 👉 {etapa}')
         except Exception as e:
             st.error(f'Erro ao atualizar o registro {e}', icon="🔥")
             # print(f'Erro ao atualizar o registro {e}', icon="🔥")
@@ -461,7 +461,7 @@ if st.session_state.ger_aba == "Incluir":
         erro = DadosVazios(novos_dados)
         if erro > 0 and erro < 100:
             message, etapa = ShowErro(erro)
-            st.warning(f' ##### Campo :point_right: {message} :warning: INVÁLIDO !  :mag_right: ETAPA :point_right: {etapa}')
+            st.warning(f' ##### Campo 👉 {message} :warning: INVÁLIDO !  :mag_right: ETAPA 👉 {etapa}')
         if erro == 0 or erro >= 100:
             dict_rel = ShowRelatorio(novos_dados)
             st.session_state.ger_dict_rel = dict_rel
@@ -524,7 +524,7 @@ if st.session_state.ger_aba == "Alterar":
     registro = st.session_state.ger_item_selecionado
     if registro:
         if registro.get("status_rel_01") == 'Concluído':
-            st.error(f"### O relatório :point_right: {registro.get('relatorio')} já foi concluído.")
+            st.error(f"### O relatório 👉 {registro.get('relatorio')} já foi concluído.")
             if st.button("Mostra Relatórios"):
                 st.session_state.ger_aba = "Listar"
                 st.rerun()
@@ -560,7 +560,7 @@ if st.session_state.ger_aba == "Alterar":
                     else:
                         message, etapa = ShowErro(erro)
                         st.session_state.exibir_alerta_alterar = False
-                        st.warning(f' ##### Campo :point_right: {message} :warning: INVÁLIDO !  :mag_right: ETAPA :point_right: {etapa}')
+                        st.warning(f' ##### Campo 👉 {message} :warning: INVÁLIDO !  :mag_right: ETAPA 👉 {etapa}')
                 except Exception as e:
                     st.error(f'Erro ao atualizar o registro {e}', icon="🔥")
 
@@ -568,7 +568,7 @@ if st.session_state.ger_aba == "Alterar":
                 erro = DadosVazios(novos_dados)
                 if erro > 0 and erro < 100:
                     message, etapa = ShowErro(erro)
-                    st.warning(f' ##### Campo :point_right: {message} :warning: INVÁLIDO !  :mag_right: ETAPA :point_right: {etapa}')
+                    st.warning(f' ##### Campo 👉 {message} :warning: INVÁLIDO !  :mag_right: ETAPA 👉 {etapa}')
                 if erro == 0 or erro >= 100:
                     dict_rel = ShowRelatorio(novos_dados)
                     st.session_state.ger_dict_rel = dict_rel
@@ -637,7 +637,7 @@ if st.session_state.ger_aba == "Excluir":
     if registro:
         texto1 = f'Deseja realmente excluir o relatório {registro['relatorio']} ?'
         texto2 = f"Cliente: {registro['cliente']}"
-        st.warning(f' :warning: ATENÇÃO !\n##### :point_right: {texto1}\n:point_right: {texto2}')
+        st.warning(f' :warning: ATENÇÃO !\n##### 👉 {texto1}\n👉 {texto2}')
 
         col1, col2 = st.columns(2)
         with col1:

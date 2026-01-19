@@ -3,7 +3,7 @@ from supabase import create_client, Client
 import os
 import pandas as pd
 
-from crud import supabase, listar_servicos,listar_todos_dados_servicos,incluir_servico,alterar_servico,excluir_servico
+from crud import supabase, listar_servicos,listar_todos_dados_servicos,incluir_servico,alterar_servico,excluir_servico, verificar_uso_servico
 
 st.info(f'### Serviços Cadastrados',icon=':material/add_shopping_cart:')
 
@@ -168,18 +168,53 @@ elif st.session_state.aba == "Excluir":
     st.subheader("Excluir Serviço")
     servicos = listar_servicos()
     servico = st.session_state.servico_selecionado or (servicos[0] if servicos else None)
-
+    
     if servico:
-        st.write(f"Deseja realmente excluir o serviço: {servico['descricao']} ?")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Excluir Serviço"):
-                excluir_servico(servico["id_servico"])
-                st.success("Serviço excluído com sucesso!")
-                st.session_state.servico_selecionado = None
-                st.session_state.aba = "Listar"
-                st.rerun()
-        with col2:
-            if st.button("Voltar sem excluir"):
-                st.session_state.aba = "Listar"
-                st.rerun()
+        # Verifica se o serviço está em uso
+        usado_em = verificar_uso_servico(servico["id_servico"])
+        if usado_em:
+            st.error(f"O serviço 👉 {servico['descricao']} Não pode ser excluído pois está vinculado às seguintes propostas:")
+            # Formata os dados para exibição (opcional, mas st.table aceita lista de dicts)
+            # Cria DataFrame para formatar a exibição
+            df_uso = pd.DataFrame(usado_em)
+            # Ordena as colunas (num_proposta, empresa, cidade, data_emissao)
+            colunas_ordenadas = ["num_proposta", "empresa", "cidade", "data_emissao"]
+            # Garante que só seleciona as que existem (caso o retorno mude no futuro)
+            colunas_finais = [c for c in colunas_ordenadas if c in df_uso.columns]
+            df_uso = df_uso[colunas_finais]
+            
+            # Formata a data para dd-mm-YYYY
+            if "data_emissao" in df_uso.columns:
+                df_uso["data_emissao"] = pd.to_datetime(df_uso["data_emissao"]).dt.strftime('%d-%m-%Y')
+ 
+            # Renomeia as colunas
+            df_uso = df_uso.rename(columns={
+                "num_proposta": "Proposta",
+                "empresa": "Empresa",
+                "cidade": "Cidade",
+                "data_emissao": "Emitida em"
+            })
+            
+            # Remove o índice visualmente definindo-o como string vazia
+            if not df_uso.empty:
+                df_uso.index = [""] * len(df_uso)
+            
+            st.table(df_uso)
+
+            if st.button("Voltar"):
+                    st.session_state.aba = "Listar"
+                    st.rerun()
+        else:
+            st.write(f"Deseja realmente excluir o serviço: {servico['descricao']} ?")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Excluir Serviço"):
+                    excluir_servico(servico["id_servico"])
+                    st.success("Serviço excluído com sucesso!")
+                    st.session_state.servico_selecionado = None
+                    st.session_state.aba = "Listar"
+                    st.rerun()
+            with col2:
+                if st.button("Voltar sem excluir"):
+                    st.session_state.aba = "Listar"
+                    st.rerun()

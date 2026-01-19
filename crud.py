@@ -93,6 +93,31 @@ def alterar_servico(id, dados):
 def excluir_servico(id):
     supabase.table("servicos").delete().eq("id_servico", id).execute()
 
+def verificar_uso_servico(id_servico):
+    """
+    Verifica se o serviço está presente em alguma proposta.
+    Retorna uma lista de dicionários com os dados das propostas encontradas,
+    ou uma lista vazia se não houver uso.
+    """
+    response = supabase.table("itens_proposta") \
+        .select("propostas(num_proposta, empresa, cidade, data_emissao)") \
+        .eq("id_servico", id_servico) \
+        .execute()
+    
+    propostas = []
+    if response.data:
+        ids_vistos = set()
+        for item in response.data:
+            # item['propostas'] pode ser um dict ou None se o join falhar (mas aqui deve ser dict)
+            prop = item.get('propostas')
+            if prop:
+                # O join retorna um dicionário simples se for N:1
+                # Garantir que num_proposta existe para deduplicação
+                num = prop.get('num_proposta')
+                if num and num not in ids_vistos:
+                    ids_vistos.add(num)
+                    propostas.append(prop)
+    return propostas
 # ####################################################
 # PLANILHA DE COMPATIBILIDDE - TABELA SASDATA60
 # create table public.sasdata60 (
