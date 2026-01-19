@@ -3,8 +3,8 @@ from supabase import create_client, Client
 import os
 import pandas as pd
 
-from crud import supabase, listar_servicos,listar_todos_dados_servicos,incluir_servico,alterar_servico,excluir_servico, verificar_uso_servico
-
+# from crud import supabase, listar_servicos,listar_todos_dados_servicos,incluir_servico,alterar_servico,excluir_servico, verificar_uso_servico
+from crud import *
 st.info(f'### Serviços Cadastrados',icon=':material/add_shopping_cart:')
 
 if "aba" not in st.session_state:
