@@ -173,7 +173,9 @@ elif st.session_state.aba == "Excluir":
         # Verifica se o serviço está em uso
         usado_em = verificar_uso_servico(servico["id_servico"])
         if usado_em:
-            st.error(f"O serviço 👉 {servico['descricao']} Não pode ser excluído pois está vinculado às seguintes propostas:")
+            texto1= f"O serviço  {servico['descricao']} "
+            texto2= "Não pode ser excluído pois está vinculado às seguintes propostas:"
+            st.success(f'##### :warning: ATENÇÃO !\n###### 👉 {texto1}\n###### 🔴 {texto2}')
             # Formata os dados para exibição (opcional, mas st.table aceita lista de dicts)
             # Cria DataFrame para formatar a exibição
             df_uso = pd.DataFrame(usado_em)

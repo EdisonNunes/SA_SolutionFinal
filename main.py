@@ -67,3 +67,4 @@ pg.run()
 # https://streamlit-emoji-shortcodes-streamlit-app-gwckff.streamlit.app/
 # Google's Material Symbols font library
 # https://fonts.google.com/icons
+# https://getemoji.com/
