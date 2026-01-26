@@ -174,7 +174,10 @@ elif st.session_state.aba == "Excluir":
         usado_em = verificar_uso_servico(servico["id_servico"])
         if usado_em:
             texto1= f"O serviço  {servico['descricao']} "
-            texto2= "Não pode ser excluído pois está vinculado às seguintes propostas:"
+            if len(usado_em) == 1:
+                texto2=f"Não pode ser excluído pois está vinculado à proposta 📝{usado_em[0]['num_proposta']}"
+            else:
+                texto2= "Não pode ser excluído pois está vinculado às seguintes propostas 📝"    
             st.success(f'##### :warning: ATENÇÃO !\n###### 👉 {texto1}\n###### 🔴 {texto2}')
             # Formata os dados para exibição (opcional, mas st.table aceita lista de dicts)
             # Cria DataFrame para formatar a exibição
@@ -207,7 +210,9 @@ elif st.session_state.aba == "Excluir":
                     st.session_state.aba = "Listar"
                     st.rerun()
         else:
-            st.write(f"Deseja realmente excluir o serviço: {servico['descricao']} ?")
+            texto1 = f"Deseja realmente excluir o serviço: "
+            texto2 = f'{servico['descricao']}'
+            st.success(f'##### :warning: ATENÇÃO !\n##### 👉 {texto1}\n###### 🟢 {texto2}')
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Excluir Serviço"):
