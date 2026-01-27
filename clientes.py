@@ -182,7 +182,9 @@ elif st.session_state.aba == "Excluir":
     cliente = st.session_state.cliente_selecionado or (clientes[0] if clientes else None)
 
     if cliente:
-        st.write(f"Deseja realmente excluir o cliente: {cliente['empresa']} Filial : {cliente['cidade']}?")
+        texto1 = "Deseja realmente excluir o cliente: "
+        texto2 = f'{cliente['empresa']} 👉Filial : {cliente['cidade']}'
+        st.success(f'##### :warning: ATENÇÃO !\n###### 👉 {texto1}\n###### 🟢 {texto2}')
         col1, col2 = st.columns(2)
         with col1:
             if st.button("Excluir Cliente"):
