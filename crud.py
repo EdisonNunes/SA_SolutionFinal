@@ -66,7 +66,7 @@ def excluir_cliente(id):
 # ) TABLESPACE pg_default;
 # ####################################################    
 def listar_servicos(filtro_empresa=""):
-    query = supabase.table("servicos").select("id_servico, descricao, valor")
+    query = supabase.table("servicos").select("id_servico, descricao, valor, ref, codigo, tipo")
     if filtro_empresa:
         query = query.filter("descricao", "ilike", f"%{filtro_empresa}%")
     query = query.order("descricao", desc=False)
@@ -118,6 +118,7 @@ def verificar_uso_servico(id_servico):
                     ids_vistos.add(num)
                     propostas.append(prop)
     return propostas
+
 # ####################################################
 # PLANILHA DE COMPATIBILIDDE - TABELA SASDATA60
 # create table public.sasdata60 (

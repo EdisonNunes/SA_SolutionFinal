@@ -33,50 +33,63 @@ if st.session_state.aba == "Listar":
 
     if servicos:
         servicos_paginados = servicos[inicio:fim]
-        df = pd.DataFrame(servicos_paginados).copy()
-        df["Selecionar"] = False
-        df["id_servico"] = df["id_servico"].astype(str)
+        df_exibicao = pd.DataFrame(servicos_paginados).copy()
+        
+        # Formatação de campos para exibição
+        df_exibicao["valor_formatado"] = df_exibicao["valor"].apply(
+            lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+        df_exibicao["Selecionar"] = ""
+        df_exibicao["id_servico"] = df_exibicao["id_servico"].astype(str)
 
-        resultado = st.data_editor(df,
-                    # width= 'stretch', Somente na nova versão do streamlit
-                    hide_index=True,
-                    column_order=["Selecionar"] + [col for col in df.columns if col not in ("Selecionar", "id_servico")],
-                    column_config={
-                                        "descricao": st.column_config.TextColumn("Descrição"),
-                                        "valor": st.column_config.NumberColumn("Valor(R$)", format='%.2f'),
-                                   },
-                    # key="tabela_servicos",
-                    num_rows="dynamic")
+        # Colunas e Configuração
+        cols_exibicao = ["Selecionar", "descricao", "valor_formatado", "ref", "codigo", "tipo"]
+        
+        selecao = st.dataframe(
+            df_exibicao[cols_exibicao],
+            hide_index=True,
+            width='stretch',
+            column_config={
+                "Selecionar": st.column_config.TextColumn("Selecionar", help="Clique na linha para selecionar"),
+                "descricao": st.column_config.TextColumn("Descrição"),
+                "valor_formatado": st.column_config.TextColumn("Valor (R$)"),
+                "ref": st.column_config.TextColumn("Referência"),
+                "codigo": st.column_config.TextColumn("Código"),
+                "tipo": st.column_config.TextColumn("Tipo"),
+            },
+            selection_mode="single-row",
+            on_select="rerun",
+            key="grid_servicos"
+        )
 
-
-        selecionados = resultado[resultado["Selecionar"] == True]
-        if not selecionados.empty:
-            idx = selecionados.index[0]
-            id_selecionado = servicos_paginados[idx]["id_servico"]
-            servico_completo = next((c for c in listar_todos_dados_servicos() if c["id_servico"] == id_selecionado), None)
-            # print(servico_completo)
-            if servico_completo:
-                st.session_state.servico_selecionado = servico_completo
-            if len(selecionados) > 1:
-                st.error("Selecione apenas 1 registro por vez.")
-                if st.button("Voltar"):
-                    st.rerun()
-            elif len(selecionados) == 1:
-                idx = selecionados.index[0]
-                id_sel = resultado.loc[idx, "id_servico"]
+        # Lógica de Seleção
+        indices_selecionados = selecao.get("selection", {}).get("rows", [])
+        
+        if indices_selecionados:
+            idx_paginado = indices_selecionados[0]
+            if idx_paginado < len(servicos_paginados):
+                id_selecionado = servicos_paginados[idx_paginado]["id_servico"]
                 
+                servico_completo = next((c for c in listar_todos_dados_servicos() if c["id_servico"] == id_selecionado), None)
+                
+                if servico_completo:
+                    st.session_state.servico_selecionado = servico_completo
+        else:
+             st.session_state.servico_selecionado = None
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.session_state.pagina > 0:
-            if st.button("⬅ Página anterior"):
-                st.session_state.pagina -= 1
-                st.rerun()
-    with col2:
-        if fim < total:
-            if st.button("Próxima página ➡"):
-                st.session_state.pagina += 1
-                st.rerun()
+    col_pag1, col_pag2, col_pag3 = st.columns([1, 2, 1])
+    
+    total_paginas = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+
+    if col_pag1.button("⬅️", disabled=st.session_state.pagina <= 0):
+        st.session_state.pagina -= 1
+        st.rerun()
+
+    col_pag2.write(f"Página {st.session_state.pagina + 1} de {total_paginas}")
+
+    if col_pag3.button("➡️", disabled=(st.session_state.pagina + 1) >= total_paginas):
+        st.session_state.pagina += 1
+        st.rerun()
 
     with st.container():
         col1, col2, col3, col4 = st.columns(4)

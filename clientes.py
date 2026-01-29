@@ -41,52 +41,73 @@ if st.session_state.aba == "Listar":
 
     if clientes:
         clientes_paginados = clientes[inicio:fim]
-        df = pd.DataFrame(clientes_paginados).copy()
-        df["Selecionar"] = False
-        df["id"] = df["id"].astype(str)
+        df_exibicao = pd.DataFrame(clientes_paginados).copy()
+        
+        # Adicionar coluna visual de seleção (vazia)
+        df_exibicao["Selecionar"] = ""
+        df_exibicao["id"] = df_exibicao["id"].astype(str)
 
-        resultado = st.data_editor(df,
-                    # width= 'stretch', Somente na nova versão do streamlit
-                    hide_index=True,
-                    column_order=["Selecionar"] + [col for col in df.columns if col not in ("Selecionar", "id")],
-                    column_config={
-                                    "empresa": st.column_config.TextColumn("Empresa"),
-                                    "cidade": st.column_config.TextColumn("Cidade"),
-                                    "telefone": st.column_config.TextColumn("Telefone"),
-                                    "contato": st.column_config.TextColumn("Contato"),
-                                   },
-                    # key="tabela_clientes",
-                    num_rows="dynamic")
+        # Definir colunas para exibição
+        cols_exibicao = ["Selecionar", "empresa", "cidade", "telefone", "contato"]
 
+        # Configurar Grid
+        selecao = st.dataframe(
+            df_exibicao[cols_exibicao],
+            hide_index=True,
+            width='stretch',
+            column_config={
+                "Selecionar": st.column_config.TextColumn("Selecionar", help="Clique na linha para selecionar"),
+                "empresa": st.column_config.TextColumn("Empresa"),
+                "cidade": st.column_config.TextColumn("Cidade"),
+                "telefone": st.column_config.TextColumn("Telefone"),
+                "contato": st.column_config.TextColumn("Contato"),
+            },
+            selection_mode="single-row",
+            on_select="rerun",
+            key="grid_clientes"
+        )
 
-        selecionados = resultado[resultado["Selecionar"] == True]
-        if not selecionados.empty:
-            idx = selecionados.index[0]
-            id_selecionado = clientes_paginados[idx]["id"]
-            cliente_completo = next((c for c in listar_todos_dados_clientes() if c["id"] == id_selecionado), None)
-            # print(cliente_completo)
-            if cliente_completo:
-                st.session_state.cliente_selecionado = cliente_completo
-            if len(selecionados) > 1:
-                st.error("Selecione apenas 1 registro por vez.")
-                if st.button("Voltar"):
-                    st.rerun()
-            elif len(selecionados) == 1:
-                idx = selecionados.index[0]
-                id_sel = resultado.loc[idx, "id"]
+        # Lógica de Seleção
+        indices_selecionados = selecao.get("selection", {}).get("rows", [])
+        
+        if indices_selecionados:
+            idx_paginado = indices_selecionados[0]
+            # O índice retornado é relativo à página exibida (0 a PAGE_SIZE-1)
+            # Precisamos pegar o cliente correspondente na lista paginada
+            if idx_paginado < len(clientes_paginados):
+                cliente_selecionado_pag = clientes_paginados[idx_paginado]
+                id_selecionado = cliente_selecionado_pag["id"]
                 
+                # Buscar dados completos (caso a lista inicial seja resumida)
+                # O código original busca todos os dados apenas do selecionado
+                cliente_completo = next((c for c in listar_todos_dados_clientes() if c["id"] == id_selecionado), None)
+                
+                if cliente_completo:
+                    st.session_state.cliente_selecionado = cliente_completo
+        else:
+            # Se nada selecionado na grid, limpamos a seleção (opcional, mas bom pra consistência)
+             st.session_state.cliente_selecionado = None
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.session_state.pagina > 0:
-            if st.button("⬅ Página anterior"):
-                st.session_state.pagina -= 1
-                st.rerun()
-    with col2:
-        if fim < total:
-            if st.button("Próxima página ➡"):
-                st.session_state.pagina += 1
-                st.rerun()
+    # Controles de Navegação (Estilo proposta.py)
+    col_pag1, col_pag2, col_pag3 = st.columns([1, 2, 1])
+    
+    total_paginas = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    # Ajuste para base 1 na visualização, mas mantendo base 0 no estado se preferir, 
+    # ou migrando tudo para base 1.
+    # O código original usava base 0 (inicio = st.session_state.pagina * PAGE_SIZE).
+    # O código proposta.py usa base 1. 
+    # Vamos manter base 0 no backend (session_state.pagina) para minimizar impacto no resto do código, 
+    # mas exibir como Base 1.
+
+    if col_pag1.button("⬅️", disabled=st.session_state.pagina <= 0):
+        st.session_state.pagina -= 1
+        st.rerun()
+
+    col_pag2.write(f"Página {st.session_state.pagina + 1} de {total_paginas}")
+
+    if col_pag3.button("➡️", disabled=(st.session_state.pagina + 1) >= total_paginas):
+        st.session_state.pagina += 1
+        st.rerun()
 
     with st.container():
         col1, col2, col3, col4 = st.columns(4)
