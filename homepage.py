@@ -16,7 +16,7 @@ coluna_esquerda.markdown("##### :orange[Gerador de propostas comerciais]")
 coluna_esquerda.markdown("##### :orange[Gerador de relatórios]")
 coluna_esquerda.markdown("##### ") # Gera espaço entre otítulo e Versão
 
-coluna_esquerda.markdown("#### :blue-background[Versão 2.2]") 
+coluna_esquerda.markdown("#### :blue-background[Versão 2.3]") 
 if nome_usuario:
     coluna_esquerda.write(f'#### Bem vindo, {nome_usuario}')  # markdown
 
