@@ -39,6 +39,21 @@ def set_cell_border(cell, **kwargs):
                 element.set(qn('w:{}'.format(key)), str(value))
 
 
+def force_update_fields(doc):
+    """
+    Força o Word a pedir a atualização de campos (como numeração de páginas) ao abrir o arquivo.
+    Equivalente a apertar F9 no documento.
+    """
+    element = doc.settings.element
+    update_fields = element.find(qn('w:updateFields'))
+    if update_fields is None:
+        update_fields = OxmlElement('w:updateFields')
+        update_fields.set(qn('w:val'), 'true')
+        element.append(update_fields)
+    else:
+        update_fields.set(qn('w:val'), 'true')
+
+
 def listar_alinhamentos_da_tabela(docx_path):
     doc = Document(docx_path)
     
@@ -352,6 +367,9 @@ def gerar_documento_word(
         # Alinhamento para os campos de total
         cel.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
+
+    # Forçar atualização de campos (numeração de página, etc)
+    force_update_fields(doc)
 
     doc.save('temp.docx')
     # listar_alinhamentos_da_tabela('temp.docx')
