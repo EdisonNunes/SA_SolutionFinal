@@ -67,16 +67,44 @@ def listar_alinhamentos_da_tabela(docx_path):
 def substituir_tags(paragrafo, tags: dict):
     """
     Substitui tags dentro de um parágrafo do Word.
-    Exemplo:
-        substituir_tags(p, {"{{CLIENTE}}": "Cristália"})
+    Se houver campos (ex: numeração de página), faz substituição run-a-run para não quebrá-los.
     """
-
-    if not paragrafo.text:
-        return
     
-    for chave, valor in tags.items():
-        if chave in paragrafo.text:
-            paragrafo.text = paragrafo.text.replace(chave, str(valor))
+    # 1. Verificar se existem campos (Field Characters, Simple Fields ou Instruction Text) no parágrafo
+    xml_paragrafo = paragrafo._element.xml
+    tem_campo = any(tag in xml_paragrafo for tag in ["w:fldChar", "w:fldSimple", "w:instrText"])
+            
+    if tem_campo:
+        # Modo Seguro: Substituir apenas dentro de cada Run para preservar os campos
+        for run in paragrafo.runs:
+            if run.text:
+                texto_run = run.text
+                mudou = False
+                for chave, valor in tags.items():
+                    if chave in texto_run:
+                        texto_run = texto_run.replace(chave, str(valor))
+                        mudou = True
+                if mudou:
+                    run.text = texto_run
+    else:
+        # Modo Padrão: Substituir no texto completo (garante que tags quebradas sejam achadas)
+        if not paragrafo.text:
+            return
+        
+        texto_atual = paragrafo.text
+        mudou_paragrafo = False
+        for chave, valor in tags.items():
+            if chave in texto_atual:
+                texto_atual = texto_atual.replace(chave, str(valor))
+                mudou_paragrafo = True
+        
+        if mudou_paragrafo:
+            # Tentar preservar formatação básica ao substituir no parágrafo
+            # Se houver apenas um run, é mais seguro simplesmente mudar run.text
+            if len(paragrafo.runs) == 1:
+                paragrafo.runs[0].text = texto_atual
+            else:
+                paragrafo.text = texto_atual
 
 # ======================================================
 # 2. Geração do documento Word
@@ -183,9 +211,13 @@ def gerar_documento_word(
         for p in footer.paragraphs:
             substituir_tags(p, tags)
             for run in p.runs:
-                # print('run: ',run.font.name, run.font.size, run.element.text)
-                run.font.name = "Arial"
-                run.font.size = Pt(5) # Tamanho 5
+                # Se o run contém campos do Word ou está vazio, evitamos mexer na fonte para não quebrar a lógica do Docx
+                if "w:fldChar" in run._element.xml or "w:instrText" in run._element.xml:
+                    continue
+                
+                if run.text.strip() or not run.text: # Aplica se tiver texto ou for run de espaço intencional
+                    run.font.name = "Arial"
+                    run.font.size = Pt(5) # Tamanho 5
 
     # ================================
     # 4) TABELA DE ITENS (SEGUNDA TABELA!)
@@ -255,15 +287,35 @@ def gerar_documento_word(
                 cel.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
 
+    # Configuração da borda (1.5pt, Cor 4F81BD)
+    borda_config = {
+        "sz": 12, 
+        "val": "single", 
+        "color": "4F81BD"
+    }
+
     # ================================
     # 6) LINHA EM BRANCO
     # ================================
     linha_vazia = tabela_itens.add_row().cells
+    borda_nula = {"val": "nil"}
+    
+    # Define kwargs para borda nula em todos os lados
+    kwargs_borda_nula = {
+        "top": borda_nula, 
+        "bottom": borda_nula, 
+        "start": borda_nula, 
+        "end": borda_nula
+    }
+
     for cel in linha_vazia:
         par = cel.paragraphs[0]
         run = par.add_run(" ")
         run.font.name = "Arial"
         run.font.size = Pt(8)
+        
+        # Borda nula em todas as colunas
+        set_cell_border(cel, **kwargs_borda_nula)
 
     # ================================
     # 7) LINHA SUB.TOTAL
@@ -276,13 +328,6 @@ def gerar_documento_word(
         .replace(",", "X").replace(".", ",").replace("X", ".")
     )
 
-    # Configuração da borda (1.5pt, Cor 4F81BD)
-    borda_config = {
-        "sz": 12, 
-        "val": "single", 
-        "color": "4F81BD"
-    }
-
     for cel in linha_total:
         for par in cel.paragraphs:
             for run in par.runs:
@@ -294,13 +339,16 @@ def gerar_documento_word(
     for i, cel in enumerate(linha_total):
         cel.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-        # Aplicar APENAS a borda SUPERIOR nas colunas 5 e 7
+        # Borda nula em todas as colunas (base)
+        set_cell_border(cel, **kwargs_borda_nula)
+
+        # Aplicar APENAS a borda SUPERIOR nas colunas 6 e 7
         if i in [6, 7]:
             set_cell_border(
                 cel, 
-                top=borda_config  # <--- Mantido apenas o 'top'
+                top=borda_config
             )
-            cel.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            
         # Alinhamento para os campos de total
         cel.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
