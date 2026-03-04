@@ -49,7 +49,7 @@ pg = st.navigation(
         'Propostas': [st.Page('proposta.py',    title='Proposta Comercial', icon=':material/amend:')], 
         'Gerenciar Relatórios':  [
                        st.Page('compatquimica.py',      title='Compatibilidade Química',    icon=':material/thumb_up:'),
-                       st.Page('pontobolha.py',     title='Ponto de Bolha',             icon=':material/thumb_up:'),
+#                       st.Page('pontobolha.py',     title='Ponto de Bolha',             icon=':material/thumb_up:'),
                        st.Page('exporta_rel.py',    title='Exporta Relatório',          icon=':material/csv:')
                       ],
         'Cadastros':   [
