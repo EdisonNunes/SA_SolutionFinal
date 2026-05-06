@@ -155,8 +155,9 @@ elif st.session_state.aba == "Alterar":
                 "valor": st.number_input("Valor em R$", value=servico.get("valor", ""), format= '%.2f', step=100.0),
                 "codigo": st.text_input("Código", value=servico.get("codigo", "")),
                 "codigo_raiz": st.text_input("Código Raiz", value=servico.get("codigo_raiz", "")),
-                #"tipo": st.text_input("Tipo", value=servico.get("tipo", "")),
-                "tipo": st.selectbox("Tipo", index=tipo_servico, options=['Serviço','Produto']),
+                # "tipo": st.text_input("Tipo", value=servico.get("tipo", "")),
+                # "tipo": st.selectbox("Tipo", index=tipo_servico, options=['Serviço','Produto']),
+                "tipo": st.selectbox("Tipo", ('Serviço','Produto'),)
             }
             
             col1, col2 = st.columns(2)
