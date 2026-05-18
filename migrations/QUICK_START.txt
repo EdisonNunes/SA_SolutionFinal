@@ -1,0 +1,154 @@
+#!/bin/bash
+# Script de Execução Rápida - Passo a Passo Visual
+#
+# OBJETIVO: Execute APENAS os GRANTs necessários para Data API
+# TEMPO: ~5 segundos
+# RESULTADO: App compatível com deadline Supabase (30/10/2026)
+
+cat << 'EOF'
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║                    🔐 SCRIPT SQL SIMPLIFICADO - APENAS GRANTs           ║
+║              Data API compatível em um arquivo único                   ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+📁 ARQUIVO A EXECUTAR:
+   → migrations/003_complete_schema_and_rls.sql
+
+📊 O QUE CONTÉM:
+
+   ✅ PASSO ÚNICO - Conceder GRANTs (Data API - Supabase)
+      • SELECT para anon
+      • SELECT, INSERT, UPDATE, DELETE para authenticated
+      • SELECT, INSERT, UPDATE, DELETE para service_role
+
+      Tabelas afetadas: propostas, clientes, servicos, itens_proposta, sasdata60, sequencia
+
+   ❌ NÃO CONTÉM (não necessário):
+      • Adição de colunas (já existem)
+      • user_id (sem isolamento de dados)
+      • RLS (sem isolamento de dados)
+      • Políticas (sem isolamento de dados)
+      • Triggers (sem isolamento de dados)
+
+═══════════════════════════════════════════════════════════════════════════
+
+🚀 COMO EXECUTAR (6 etapas simples):
+
+   1️⃣ ABRA SUPABASE DASHBOARD
+      https://app.supabase.com
+      → Faça login
+      → Selecione seu projeto
+
+   2️⃣ VÁ PARA SQL EDITOR
+      Painel esquerdo → SQL Editor (ou clique em "New Query")
+
+   3️⃣ COPIE O SCRIPT
+      Abra: migrations/003_complete_schema_and_rls.sql
+      Pressione: Ctrl+A (selecionar tudo)
+      Pressione: Ctrl+C (copiar)
+
+   4️⃣ COLE NO SUPABASE
+      No editor SQL do Supabase:
+      Pressione: Ctrl+V (colar)
+
+   5️⃣ EXECUTE
+      Clique no botão: RUN
+      ou pressione: Ctrl+Enter
+
+   6️⃣ AGUARDE
+      Status: "Running query..." → "Success" (< 10 segundos)
+      ✅ Você verá múltiplas mensagens de GRANT
+      ❌ Se houver erro, copie a mensagem para investigar
+
+═══════════════════════════════════════════════════════════════════════════
+
+✅ VERIFICAÇÃO (execute essa query após o script):
+
+   Verificar GRANTs aplicados
+   ──────────────────────────
+   SELECT grantee, privilege_type, table_name
+   FROM information_schema.role_table_grants
+   WHERE table_name IN ('propostas', 'clientes', 'servicos', 'itens_proposta', 'sasdata60', 'sequencia')
+   ORDER BY table_name, grantee;
+
+   Você deve ver para cada tabela:
+   • anon → SELECT
+   • authenticated → SELECT, INSERT, UPDATE, DELETE
+   • service_role → SELECT, INSERT, UPDATE, DELETE
+
+═══════════════════════════════════════════════════════════════════════════
+
+📋 RESUMO TÉCNICO:
+
+   ANTES DO SCRIPT:
+   ────────────────
+   ❌ Sem GRANTs → Erro 42501 após 30/10/2026
+   ❌ App pode parar de funcionar
+
+   DEPOIS DO SCRIPT:
+   ────────────────
+   ✅ GRANTs aplicados (Data API compatível)
+   ✅ App continua funcionando normalmente
+   ✅ Deadline Supabase cumprido
+
+═══════════════════════════════════════════════════════════════════════════
+
+📅 DEADLINE E STATUS:
+
+   Prazo Supabase:
+   ├─ 30/05/2026 ← GRANTs obrigatórios para NOVOS projetos
+   ├─ 30/10/2026 ← GRANTs obrigatórios para TODOS projetos
+   └─ DATA ATUAL: 13/05/2026 ✅ Você está ADIANTADO!
+
+═══════════════════════════════════════════════════════════════════════════
+
+🎯 PRÓXIMOS PASSOS:
+
+   1. Execute o script (6 passos acima)
+   2. Verifique os GRANTs com a query acima
+   3. Teste a app: streamlit run main.py
+   4. Crie uma proposta para garantir que tudo funciona
+   5. Pronto! Seu app está 100% compatível
+
+═══════════════════════════════════════════════════════════════════════════
+
+💡 DICAS:
+
+   • O script usa GRANTs idempotentes → pode executar múltiplas vezes
+   • Não precisa de downtime do app → execução instantânea
+   • Sem mudanças no código → app continua funcionando
+   • Se errar, GRANTs são fáceis de reverter (REVOKE)
+
+═══════════════════════════════════════════════════════════════════════════
+
+📖 DOCUMENTAÇÃO COMPLETA:
+
+   Veja: migrations/README_EXECUTE_SCRIPT.md
+   ├─ Instruções detalhadas
+   ├─ Troubleshooting
+   ├─ FAQ
+   ├─ Explicação do que faz
+   └─ Próximos passos
+
+═══════════════════════════════════════════════════════════════════════════
+
+❓ DÚVIDAS?
+
+   P: Preciso mudar código?
+   R: Não. Script só concede permissões.
+
+   P: App vai quebrar?
+   R: Não. Backward-compatible.
+
+   P: Quanto tempo leva?
+   R: < 10 segundos no Supabase.
+
+   P: Posso desfazer?
+   R: Sim, com REVOKE, mas não é necessário.
+
+═══════════════════════════════════════════════════════════════════════════
+
+✨ SUCESSO! Seu app está pronto para o futuro! ✨
+
+EOF
