@@ -7,10 +7,12 @@ enquanto direciona para os novos serviços.
 DEPRECATED: Use services/clientes.py e services/servicos.py
 """
 
+import logging
 import warnings
 import streamlit as st
 from typing import List, Dict, Any, Optional
-from core import LoggerManager
+from supabase import create_client
+from config.settings import settings
 from services import ClienteService, ServicoService
 
 # Avisar sobre depreciação
@@ -20,7 +22,7 @@ warnings.warn(
     stacklevel=2
 )
 
-logger = LoggerManager.get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Instâncias dos serviços
 _cliente_service = None
@@ -188,12 +190,17 @@ class SupabaseProxy:
     """Proxy para manter compatibilidade com código legado."""
 
     def __init__(self):
-        """Inicializa com cliente Supabase direto."""
-        from core import get_db
-        self._client = get_db()
+        """Inicializa sem criar cliente imediatamente."""
+        self._client = None
+
+    def _ensure_client(self):
+        if self._client is None:
+            config = settings.get_supabase_config()
+            self._client = create_client(config["url"], config["key"])
 
     def __getattr__(self, name):
         """Delegar chamadas para o cliente Supabase real."""
+        self._ensure_client()
         return getattr(self._client, name)
 
 # Instância global para compatibilidade
