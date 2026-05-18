@@ -8,6 +8,7 @@ DEPRECATED: Use services/clientes.py e services/servicos.py
 """
 
 import warnings
+import streamlit as st
 from typing import List, Dict, Any, Optional
 from core import LoggerManager
 from services import ClienteService, ServicoService
