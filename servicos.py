@@ -39,34 +39,31 @@ if st.session_state.aba == "Listar":
         df_exibicao["valor_formatado"] = df_exibicao["valor"].apply(
             lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
-        df_exibicao["Selecionar"] = ""
+        df_exibicao["Selecionar"] = False
         df_exibicao["id_servico"] = df_exibicao["id_servico"].astype(str)
 
         # Colunas e Configuração
         cols_exibicao = ["Selecionar", "descricao", "valor_formatado", "ref", "codigo", "tipo"]
         
-        selecao = st.dataframe(
-            df_exibicao[cols_exibicao],
+        selecao = st.data_editor(
+            df_exibicao[cols_exibicao].reset_index(drop=True),
             hide_index=True,
-            width='stretch',
             column_config={
-                "Selecionar": st.column_config.TextColumn("Selecionar", help="Clique na linha para selecionar"),
+                "Selecionar": st.column_config.CheckboxColumn("Selecionar", help="Marque para selecionar"),
                 "descricao": st.column_config.TextColumn("Descrição"),
                 "valor_formatado": st.column_config.TextColumn("Valor (R$)"),
                 "ref": st.column_config.TextColumn("Referência"),
                 "codigo": st.column_config.TextColumn("Código"),
                 "tipo": st.column_config.TextColumn("Tipo"),
             },
-            selection_mode="single-row",
-            on_select="rerun",
             key="grid_servicos"
         )
 
         # Lógica de Seleção
-        indices_selecionados = selecao.get("selection", {}).get("rows", [])
+        selecionados = selecao[selecao["Selecionar"] == True]
         
-        if indices_selecionados:
-            idx_paginado = indices_selecionados[0]
+        if len(selecionados) == 1:
+            idx_paginado = selecionados.index[0]
             if idx_paginado < len(servicos_paginados):
                 id_selecionado = servicos_paginados[idx_paginado]["id_servico"]
                 
@@ -74,8 +71,10 @@ if st.session_state.aba == "Listar":
                 
                 if servico_completo:
                     st.session_state.servico_selecionado = servico_completo
+        elif len(selecionados) > 1:
+            st.error("Selecione apenas 1 serviço por vez.")
         else:
-             st.session_state.servico_selecionado = None
+            st.session_state.servico_selecionado = None
 
     col_pag1, col_pag2, col_pag3 = st.columns([1, 2, 1])
     

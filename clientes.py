@@ -43,50 +43,43 @@ if st.session_state.aba == "Listar":
         clientes_paginados = clientes[inicio:fim]
         df_exibicao = pd.DataFrame(clientes_paginados).copy()
         
-        # Adicionar coluna visual de seleção (vazia)
-        df_exibicao["Selecionar"] = ""
+        # Adicionar coluna de seleção com checkbox
+        df_exibicao["Selecionar"] = False
         df_exibicao["id"] = df_exibicao["id"].astype(str)
 
         # Definir colunas para exibição
         cols_exibicao = ["Selecionar", "empresa", "cidade", "telefone", "contato"]
 
         # Configurar Grid
-        selecao = st.dataframe(
-            df_exibicao[cols_exibicao],
+        selecao = st.data_editor(
+            df_exibicao[cols_exibicao].reset_index(drop=True),
             hide_index=True,
-            width='stretch',
             column_config={
-                "Selecionar": st.column_config.TextColumn("Selecionar", help="Clique na linha para selecionar"),
+                "Selecionar": st.column_config.CheckboxColumn("Selecionar", help="Marque para selecionar"),
                 "empresa": st.column_config.TextColumn("Empresa"),
                 "cidade": st.column_config.TextColumn("Cidade"),
                 "telefone": st.column_config.TextColumn("Telefone"),
                 "contato": st.column_config.TextColumn("Contato"),
             },
-            selection_mode="single-row",
-            on_select="rerun",
             key="grid_clientes"
         )
 
         # Lógica de Seleção
-        indices_selecionados = selecao.get("selection", {}).get("rows", [])
-        
-        if indices_selecionados:
-            idx_paginado = indices_selecionados[0]
-            # O índice retornado é relativo à página exibida (0 a PAGE_SIZE-1)
-            # Precisamos pegar o cliente correspondente na lista paginada
+        selecionados = selecao[selecao["Selecionar"] == True]
+
+        if len(selecionados) == 1:
+            idx_paginado = selecionados.index[0]
             if idx_paginado < len(clientes_paginados):
                 cliente_selecionado_pag = clientes_paginados[idx_paginado]
                 id_selecionado = cliente_selecionado_pag["id"]
-                
-                # Buscar dados completos (caso a lista inicial seja resumida)
-                # O código original busca todos os dados apenas do selecionado
+
                 cliente_completo = next((c for c in listar_todos_dados_clientes() if c["id"] == id_selecionado), None)
-                
                 if cliente_completo:
                     st.session_state.cliente_selecionado = cliente_completo
+        elif len(selecionados) > 1:
+            st.error("Selecione apenas 1 cliente por vez.")
         else:
-            # Se nada selecionado na grid, limpamos a seleção (opcional, mas bom pra consistência)
-             st.session_state.cliente_selecionado = None
+            st.session_state.cliente_selecionado = None
 
     # Controles de Navegação (Estilo proposta.py)
     col_pag1, col_pag2, col_pag3 = st.columns([1, 2, 1])

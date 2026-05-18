@@ -15,6 +15,7 @@ if not df.empty:
         hide_index=True,
         column_order=["Selecionar", "relatorio", "cliente"],
         column_config={
+            "Selecionar": st.column_config.CheckboxColumn("Selecionar", help="Marque para selecionar"),
             "relatorio": st.column_config.TextColumn("Relatório"),
             "cliente": st.column_config.TextColumn("Empresa"),
         },

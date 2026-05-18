@@ -14,6 +14,20 @@ supabase: Client = create_client(supabase_url, supabase_key)
 
 st.info(f'### Gerenciar Relatórios - Compatibilidade Química',icon=':material/thumb_up:')
 
+
+def is_proposta_agendada(id_proposta) -> bool:
+    """Retorna True se a proposta existir e tiver status_rel_01 == 'Agendado'."""
+    try:
+        if not id_proposta:
+            return False
+        resp = supabase.table("propostas").select("status_rel_01").eq("id_proposta", id_proposta).limit(1).execute()
+        if not resp.data:
+            return False
+        status = resp.data[0].get("status_rel_01", "") or ""
+        return status.strip().lower() == 'agendado'
+    except Exception:
+        return False
+
 # Inicializa session_state
 if "ger_aba" not in st.session_state:
     st.session_state.ger_aba = "Listar"
@@ -318,7 +332,7 @@ def ShowRelatorio(novos_dados):
 
 
     df_PBEstimado = df[['RPB','PB Referencial','PB Estimado (PBMe)']]   
-    st.dataframe(df_PBEstimado, hide_index=True, width='content') 
+    st.dataframe(df_PBEstimado, hide_index=True) 
 
     xxx = df_PBEstimado.to_dict(orient='records')
     pb_referencial = xxx[0]['PB Referencial']
@@ -374,6 +388,7 @@ if st.session_state.ger_aba == "Listar":
                                    hide_index=True,
                                    column_order=["Selecionar", "OK", "relatorio", "cliente"],
                                    column_config={
+                                        "Selecionar": st.column_config.CheckboxColumn("Selecionar", help="Marque para selecionar"),
                                         "OK": st.column_config.TextColumn("Status"),
                                         "relatorio": st.column_config.TextColumn("Relatório"),
                                         "cliente": st.column_config.TextColumn("Empresa"),
@@ -446,10 +461,13 @@ if st.session_state.ger_aba == "Incluir":
                     st.session_state.exibir_alerta = True
                     st.rerun()
                 else:
-                    incluir_registro(dados=novos_dados )
-                    st.success("Planilha salva com sucesso!")
-                    st.session_state.ger_aba = "Listar"
-                    st.rerun()
+                    if not is_proposta_agendada(novos_dados.get('id_proposta')):
+                        st.error("Proposta selecionada não está com status 'Agendado'. Atualize a proposta antes de vincular o relatório.")
+                    else:
+                        incluir_registro(dados=novos_dados )
+                        st.success("Planilha salva com sucesso!")
+                        st.session_state.ger_aba = "Listar"
+                        st.rerun()
             else:
                 message, etapa = ShowErro(erro)
                 st.warning(f' ##### Campo 👉 {message} :warning: INVÁLIDO !  :mag_right: ETAPA 👉 {etapa}')
@@ -482,14 +500,16 @@ if st.session_state.ger_aba == "Incluir":
             submitted_voltar5 = st.button("🔙 Voltar a Edição")
         if submitted_salvar:
             dadoscomrelatorio = novos_dados | st.session_state.ger_dict_rel
-            # print('dadoscomrelatorio =' , dadoscomrelatorio)
             dadoscomrelatorio['status_rel_01'] = 'Concluído'
             dadoscomrelatorio['conclusao'] = RetiraCRLF(conclusao)
-            incluir_registro(dados=dadoscomrelatorio )
-            st.success("Planilha salva com sucesso!")
-            st.session_state.ger_dict_rel = None
-            st.session_state.ger_aba = "Listar"
-            st.rerun()
+            if not is_proposta_agendada(dadoscomrelatorio.get('id_proposta')):
+                st.error("Proposta selecionada não está com status 'Agendado'. Atualize a proposta antes de vincular o relatório.")
+            else:
+                incluir_registro(dados=dadoscomrelatorio )
+                st.success("Planilha salva com sucesso!")
+                st.session_state.ger_dict_rel = None
+                st.session_state.ger_aba = "Listar"
+                st.rerun()
         if submitted_voltar5:
             st.session_state.ger_dict_rel = None
             st.session_state.ger_aba = "Incluir"
@@ -513,11 +533,14 @@ if st.session_state.ger_aba == "Incluir":
             
         with col2:
             if st.button("Salvar mesmo assim"):
-                incluir_registro(dados=novos_dados )
-                st.success("Salvo com campos incompletos.")
-                st.session_state.ger_aba = "Listar"
-                st.session_state.exibir_alerta = False
-                st.rerun()
+                if not is_proposta_agendada(novos_dados.get('id_proposta')):
+                    st.error("Proposta selecionada não está com status 'Agendado'. Atualize a proposta antes de vincular o relatório.")
+                else:
+                    incluir_registro(dados=novos_dados )
+                    st.success("Salvo com campos incompletos.")
+                    st.session_state.ger_aba = "Listar"
+                    st.session_state.exibir_alerta = False
+                    st.rerun()
  
 if st.session_state.ger_aba == "Alterar":
     st.subheader("Alterar Registro")
@@ -553,10 +576,13 @@ if st.session_state.ger_aba == "Alterar":
                             st.session_state.exibir_alerta_alterar = True
                             st.rerun()  # <- ESSENCIAL!
                         else:
-                            alterar_registro(registro["id"], novos_dados)
-                            st.success("Planilha alterada com sucesso!")
-                            st.session_state.ger_aba = "Listar"
-                            st.rerun()
+                            if not is_proposta_agendada(novos_dados.get('id_proposta') or registro.get('id_proposta')):
+                                st.error("Proposta vinculada não está com status 'Agendado'. Atualize a proposta antes de vincular o relatório.")
+                            else:
+                                alterar_registro(registro["id"], novos_dados)
+                                st.success("Planilha alterada com sucesso!")
+                                st.session_state.ger_aba = "Listar"
+                                st.rerun()
                     else:
                         message, etapa = ShowErro(erro)
                         st.session_state.exibir_alerta_alterar = False
@@ -594,14 +620,16 @@ if st.session_state.ger_aba == "Alterar":
             submitted_voltar5 = st.button("🔙 Voltar a Edição")
         if submitted_salvar:
             dadoscomrelatorio = novos_dados | st.session_state.ger_dict_rel
-            # print('dadoscomrelatorio =' , dadoscomrelatorio)
             dadoscomrelatorio['status_rel_01'] = 'Concluído'
             dadoscomrelatorio['conclusao'] = RetiraCRLF(conclusao)
-            alterar_registro(id= registro['id'], dados=dadoscomrelatorio)   
-            st.success("Planilha salva com sucesso!")
-            st.session_state.ger_dict_rel = None
-            st.session_state.ger_aba = "Listar"
-            st.rerun()
+            if not is_proposta_agendada(dadoscomrelatorio.get('id_proposta') or registro.get('id_proposta')):
+                st.error("Proposta vinculada não está com status 'Agendado'. Atualize a proposta antes de vincular o relatório.")
+            else:
+                alterar_registro(id= registro['id'], dados=dadoscomrelatorio)   
+                st.success("Planilha salva com sucesso!")
+                st.session_state.ger_dict_rel = None
+                st.session_state.ger_aba = "Listar"
+                st.rerun()
         if submitted_voltar5:
             st.session_state.ger_dict_rel = None
             st.session_state.ger_aba = "Alterar"
@@ -617,14 +645,18 @@ if st.session_state.ger_aba == "Alterar":
         col1, col2 = st.columns(2)
         with col1:
             if st.button("Salvar mesmo assim - Alterar"):
-                alterar_registro(
-                    st.session_state.registro_id_cache,
-                    st.session_state.novos_dados_cache
-                )
-                st.success("Alterações salvas com campos incompletos.")
-                st.session_state.ger_aba = "Listar"
-                st.session_state.exibir_alerta_alterar = False
-                st.rerun()
+                cached = st.session_state.novos_dados_cache or {}
+                if not is_proposta_agendada(cached.get('id_proposta') or st.session_state.get('registro_id_cache')):
+                    st.error("Proposta vinculada não está com status 'Agendado'. Atualize a proposta antes de vincular o relatório.")
+                else:
+                    alterar_registro(
+                        st.session_state.registro_id_cache,
+                        st.session_state.novos_dados_cache
+                    )
+                    st.success("Alterações salvas com campos incompletos.")
+                    st.session_state.ger_aba = "Listar"
+                    st.session_state.exibir_alerta_alterar = False
+                    st.rerun()
         with col2:
             if st.button("Voltar e corrigir - Alterar"):
                 st.info("Você optou por revisar os dados.")

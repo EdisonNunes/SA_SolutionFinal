@@ -1,10 +1,243 @@
-import streamlit as st
-from supabase import create_client, Client
+"""
+Módulo CRUD - Compatibilidade com código legado.
 
-url = st.secrets['supabase']['SUPABASE_URL']
-key = st.secrets['supabase']['SUPABASE_KEY']
+Este módulo mantém compatibilidade com o código existente
+enquanto direciona para os novos serviços.
 
-supabase: Client = create_client(url, key)
+DEPRECATED: Use services/clientes.py e services/servicos.py
+"""
+
+import warnings
+from typing import List, Dict, Any, Optional
+from core import LoggerManager
+from services import ClienteService, ServicoService
+
+# Avisar sobre depreciação
+warnings.warn(
+    "crud.py está deprecated. Use services/clientes.py e services/servicos.py",
+    DeprecationWarning,
+    stacklevel=2
+)
+
+logger = LoggerManager.get_logger(__name__)
+
+# Instâncias dos serviços
+_cliente_service = None
+_servico_service = None
+
+def _get_cliente_service() -> ClienteService:
+    """Obtém instância do ClienteService."""
+    global _cliente_service
+    if _cliente_service is None:
+        _cliente_service = ClienteService()
+    return _cliente_service
+
+def _get_servico_service() -> ServicoService:
+    """Obtém instância do ServicoService."""
+    global _servico_service
+    if _servico_service is None:
+        _servico_service = ServicoService()
+    return _servico_service
+
+# =====================================================
+# CLIENTES - Funções de compatibilidade
+# =====================================================
+
+def listar_clientes(filtro_empresa: str = "") -> List[Dict[str, Any]]:
+    """
+    Lista clientes (compatibilidade).
+
+    DEPRECATED: Use ClienteService.listar()
+    """
+    try:
+        return _get_cliente_service().listar(filtro_empresa)
+    except Exception as e:
+        logger.error(f"Erro em listar_clientes: {e}")
+        return []
+
+def listar_todos_dados_clientes() -> List[Dict[str, Any]]:
+    """
+    Lista todos os dados de clientes (compatibilidade).
+
+    DEPRECATED: Use ClienteService.listar_todos()
+    """
+    try:
+        return _get_cliente_service().listar_todos()
+    except Exception as e:
+        logger.error(f"Erro em listar_todos_dados_clientes: {e}")
+        return []
+
+def incluir_cliente(dados: Dict[str, Any]) -> None:
+    """
+    Inclui cliente (compatibilidade).
+
+    DEPRECATED: Use ClienteService.criar()
+    """
+    try:
+        _get_cliente_service().criar(dados)
+    except Exception as e:
+        logger.error(f"Erro em incluir_cliente: {e}")
+        raise
+
+def alterar_cliente(id_cliente: int, dados: Dict[str, Any]) -> None:
+    """
+    Altera cliente (compatibilidade).
+
+    DEPRECATED: Use ClienteService.atualizar()
+    """
+    try:
+        _get_cliente_service().atualizar(id_cliente, dados)
+    except Exception as e:
+        logger.error(f"Erro em alterar_cliente: {e}")
+        raise
+
+def excluir_cliente(id_cliente: int) -> None:
+    """
+    Exclui cliente (compatibilidade).
+
+    DEPRECATED: Use ClienteService.excluir()
+    """
+    try:
+        _get_cliente_service().excluir(id_cliente)
+    except Exception as e:
+        logger.error(f"Erro em excluir_cliente: {e}")
+        raise
+
+# =====================================================
+# SERVIÇOS - Funções de compatibilidade
+# =====================================================
+
+def listar_servicos(filtro_descricao: str = "") -> List[Dict[str, Any]]:
+    """
+    Lista serviços (compatibilidade).
+
+    DEPRECATED: Use ServicoService.listar()
+    """
+    try:
+        return _get_servico_service().listar(filtro_descricao)
+    except Exception as e:
+        logger.error(f"Erro em listar_servicos: {e}")
+        return []
+
+def listar_todos_dados_servicos() -> List[Dict[str, Any]]:
+    """
+    Lista todos os dados de serviços (compatibilidade).
+
+    DEPRECATED: Use ServicoService.listar_todos()
+    """
+    try:
+        return _get_servico_service().listar_todos()
+    except Exception as e:
+        logger.error(f"Erro em listar_todos_dados_servicos: {e}")
+        return []
+
+def incluir_servico(dados: Dict[str, Any]) -> None:
+    """
+    Inclui serviço (compatibilidade).
+
+    DEPRECATED: Use ServicoService.criar()
+    """
+    try:
+        _get_servico_service().criar(dados)
+    except Exception as e:
+        logger.error(f"Erro em incluir_servico: {e}")
+        raise
+
+def alterar_servico(id_servico: int, dados: Dict[str, Any]) -> None:
+    """
+    Altera serviço (compatibilidade).
+
+    DEPRECATED: Use ServicoService.atualizar()
+    """
+    try:
+        _get_servico_service().atualizar(id_servico, dados)
+    except Exception as e:
+        logger.error(f"Erro em alterar_servico: {e}")
+        raise
+
+def excluir_servico(id_servico: int) -> None:
+    """
+    Exclui serviço (compatibilidade).
+
+    DEPRECATED: Use ServicoService.excluir()
+    """
+    try:
+        _get_servico_service().excluir(id_servico)
+    except Exception as e:
+        logger.error(f"Erro em excluir_servico: {e}")
+        raise
+
+def verificar_uso_servico(id_servico: int) -> List[Dict[str, Any]]:
+    """
+    Verifica uso do serviço (compatibilidade).
+
+    DEPRECATED: Use ServicoService.verificar_uso()
+    """
+    try:
+        return _get_servico_service().verificar_uso(id_servico)
+    except Exception as e:
+        logger.error(f"Erro em verificar_uso_servico: {e}")
+        return []
+
+# =====================================================
+# LEGACY - Manter compatibilidade
+# =====================================================
+
+class SupabaseProxy:
+    """Proxy para manter compatibilidade com código legado."""
+
+    def __init__(self):
+        """Inicializa com cliente Supabase direto."""
+        from core import get_db
+        self._client = get_db()
+
+    def __getattr__(self, name):
+        """Delegar chamadas para o cliente Supabase real."""
+        return getattr(self._client, name)
+
+# Instância global para compatibilidade
+supabase = SupabaseProxy()
+
+# Funções de propostas (mantidas por enquanto)
+def criar_proposta(dados):
+    """Criar proposta - TODO: refatorar."""
+    logger.warning("criar_proposta não implementada na nova arquitetura")
+    return None
+
+def atualizar_proposta(id_proposta, dados):
+    """Atualizar proposta - TODO: refatorar."""
+    logger.warning("atualizar_proposta não implementada na nova arquitetura")
+    return None
+
+def excluir_proposta(id_proposta):
+    """Excluir proposta - TODO: refatorar."""
+    logger.warning("excluir_proposta não implementada na nova arquitetura")
+    return None
+
+def buscar_propostas(filtro=""):
+    """Buscar propostas - TODO: refatorar."""
+    logger.warning("buscar_propostas não implementada na nova arquitetura")
+    return []
+
+def adicionar_item(dados):
+    """Adicionar item - TODO: refatorar."""
+    logger.warning("adicionar_item não implementada na nova arquitetura")
+    return None
+
+def buscar_itens(id_proposta):
+    """Buscar itens - TODO: refatorar."""
+    logger.warning("buscar_itens não implementada na nova arquitetura")
+    return []
+
+def atualizar_item(id_item, dados):
+    """Atualizar item - TODO: refatorar."""
+    logger.warning("atualizar_item não implementada na nova arquitetura")
+    return None
+
+def excluir_item(id_item):
+    """Excluir item - TODO: refatorar."""
+    logger.warning("excluir_item não implementada na nova arquitetura")
+    return None
 
 # ####################################################
 # CLIENTES  - TABELA CLIENTES
@@ -123,6 +356,7 @@ def verificar_uso_servico(id_servico):
 # PLANILHA DE COMPATIBILIDDE - TABELA SASDATA60
 # create table public.sasdata60 (
 #   id serial not null,
+#   id_proposta integer null,
 #   relatorio text null,
 #   status_rel_01 text null,
 #   dt_agendada_01 text null,
@@ -327,6 +561,11 @@ def ComboBoxClientes():
 #   telefone text not null,
 #   email text not null,
 #   contato text not null,
+#   status_rel_01 text null,
+#   local_realizacao text null,
+#   dt_agendada_01 date null,
+#   dt_emissao_rel_01 date null,
+#   motivo_cancelamento text null,
 #   data_emissao date not null,
 #   validade text not null,
 #   cond_pagamento text not null,

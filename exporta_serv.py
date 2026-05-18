@@ -29,6 +29,9 @@ if not df.empty:
         # use_container_width=True,
         hide_index=True,
         column_order=["Selecionar", "codigo", "descricao"],
+        column_config={
+            "Selecionar": st.column_config.CheckboxColumn("Selecionar", help="Marque para selecionar"),
+        },
         num_rows="dynamic",
     )
 else:

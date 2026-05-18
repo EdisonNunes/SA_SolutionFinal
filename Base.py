@@ -5,6 +5,20 @@ from datetime import datetime
 from utils import validar_datas_e_calcular_horas,ShowErro,RetiraCRLF
 
 
+def is_proposta_agendada(id_proposta) -> bool:
+    """Retorna True se a proposta existir e tiver status_rel_01 == 'Agendado'."""
+    try:
+        if not id_proposta:
+            return False
+        resp = supabase.table("propostas").select("status_rel_01").eq("id_proposta", id_proposta).limit(1).execute()
+        if not resp.data:
+            return False
+        status = resp.data[0].get("status_rel_01", "") or ""
+        return status.strip().lower() == 'agendado'
+    except Exception:
+        return False
+
+
 def CalculaPBEstimado(prd_res1_10, prd_res2_10, prd_res3_10,
                       wfi_res1_09, wfi_res2_09, wfi_res3_09, pb_padraowfi_09):
     erro = 0
@@ -60,191 +74,241 @@ def formulario_padrao(dados=None, combo_clientes=None):
     titulo = f'Planilha de Compatibilidade Química\n Relatório :point_right: {relatorio}'
     st.info(f'### {titulo}',icon=':material/thumb_up:')
 
-    ################## Etapa 1 - Status de pedido ##################
-    st.markdown(':orange-background[Etapa 1 - Status de pedido]')
+    ################## Etapa 1 - Identificação da Proposta ##################
+    st.markdown(':orange-background[Etapa 1 - Identificação da Proposta]')
     container1 = st.container(border=True)
     with container1:
-        # opcoes = ['Pendente', 'Agendado', 'Cancelado', 'Parcial', 'Concluído']
-        opcoes = ['Pendente', 'Agendado', 'Cancelado', 'Parcial']
-        # ajuda = '''
-        #     🕗 Pendente: Aguardando pedido do cliente\n
-        #     📅 Agendado: Preenchimento de dados não envolvidos com cálculos\n
-        #     ❌ Cancelado: Relatório suspenso\n
-        #     📝 Parcial: Preenchimento parcial dos dados de campo\n
-        #     ✅ Concluído: Relatório concluído - Não disponível para edição.
-        # '''
-        ajuda = '''
-            🕗 Pendente: Aguardando pedido do cliente\n
-            📅 Agendado: Preenchimento de dados não envolvidos com cálculos\n
-            ❌ Cancelado: Relatório suspenso\n
-            📝 Parcial: Preenchimento parcial dos dados de campo\n
-        '''
-        try:
-            valor_status_rel01  = dados.get("status_rel_01", "")
-        except:
-            valor_status_rel01 = 'Agendado'
+        # Buscar propostas com status "Agendado"
+        propostas = supabase.table("propostas").select("*").eq("status_rel_01", "Agendado").execute().data
 
-        idx_status_rel_01  = opcoes.index(valor_status_rel01)  if valor_status_rel01 in opcoes  else 1 
+        # Se estivermos alterando um relatório já existente, verificar se a proposta vinculada
+        # no registro original ainda está com status 'Agendado'. Se não, bloquear edição.
+        if dados:
+            id_prop_dados = dados.get("id_proposta")
+            if id_prop_dados and not is_proposta_agendada(id_prop_dados):
+                st.error("A proposta vinculada a este relatório não está com status 'Agendado'. Atualize a proposta antes de editar ou vincular o relatório.")
+                st.stop()
 
-        status_rel_01 = st.radio('Status Atual', options=opcoes, index=idx_status_rel_01, horizontal=True,
-                                 help=ajuda)
-        if status_rel_01 == 'Agendado':
-            dt_agendada_01 = st.text_input('Data Agendada:',placeholder='DD-MM-AAAA',
-                                       value=dados.get("dt_agendada_01", "") if dados else "")
-        if status_rel_01 == 'Cancelado':
-            motivo_01 = st.text_area('Motivo do cancelamento:', placeholder='Digite o motivo do cancelamento',
-                                       value=dados.get("motivo_01", "") if dados else "")
-        if status_rel_01 == 'Parcial' or status_rel_01 == 'Concluído':
-            dt_emissao_01 = st.text_input('Data de emissão do Relatório Preliminar:',placeholder='DD-MM-AAAA',
-                                       value=dados.get("dt_emissao_01", "") if dados else "")    
-
-    
-    ################## Etapa 2 - Identificação do Cliente  ##################
-    st.markdown(':orange-background[Etapa 2 - Identificação do Cliente]')
-
-    container2 = st.container(border=True)
-    with container2:
-        cliente_valor = dados.get("cliente", "") if dados else ""
-        cidade_valor = dados.get("cidade_02", "") if dados else ""
-
-        # Encontra índice com tolerância a erros
-        cliente_default = 0
-        for i, nome in enumerate(combo_clientes):
-             #print('i= ',i, '   Nome: ', nome) 
-             if nome.split(' - ')[0] == cliente_valor.strip():
-                 cliente_default = i
-                 break
-            
-        cliente = st.selectbox("Empresa:", combo_clientes, index=cliente_default)
-
-        nome_empresa = f"{cliente.split('-')[0].strip()}"
-        cidade = f"{cliente.split('-')[1].strip()}"
-
-        resposta = supabase.table("clientes").select("*").eq("empresa", nome_empresa).eq("cidade", cidade).execute()
-        empresa = resposta.data[0]
-
-        opcoes = ['SIM', 'NÃO']
-        local_realizado_02 = st.radio('O local de realização é o mesmo do cadastro?', options=opcoes, horizontal=True)
-        if local_realizado_02 == 'SIM':
-            endereco_02  = st.text_input('Endereço:', max_chars= 100, value= empresa['endereco'], disabled=True)
-        else:
-            endereco_02  = st.text_input('Endereço:', max_chars= 100, 
-                                         value= dados.get("endereco_02", "") if dados else '', disabled=False)
-
+        if not propostas:
+            st.warning("⚠️ Nenhuma proposta com status 'Agendado' encontrada.")
+            st.stop()
+        
+        # Selectbox para escolher a proposta
+        proposta_selecionada = st.selectbox(
+            "Selecione a Proposta",
+            propostas,
+            format_func=lambda x: f"{x['num_proposta']}  👉  {x['empresa']}",
+            key="formulario_padrao_proposta"
+        )
+        # print(proposta_selecionada)
+        id_proposta = proposta_selecionada["id_proposta"]
+        num_proposta = proposta_selecionada["num_proposta"]
+        nome_empresa = proposta_selecionada["empresa"]
+        id_cliente = proposta_selecionada.get("id_cliente", None)
+        
+        # Exibir dados do cliente de forma desabilitada
+        st.write("**Dados do Cliente:**")
+        
         col1, col2, col3 = st.columns(3)
         with col1:
-            if local_realizado_02 == 'SIM':
-                cidade_02 = st.text_input('Cidade:', max_chars= 50, value= empresa['cidade'], disabled=True)
-                cnpj_02 = st.text_input('CNPJ:', max_chars= 20, value= empresa['cnpj'], disabled=True)
-            else:    
-                cidade_02 = st.text_input('Cidade:', max_chars= 50, 
-                                          value= dados.get("cidade_02", "") if dados else '', disabled=False)
-                cnpj_02 = st.text_input('CNPJ:', max_chars= 50, 
-                                      value= dados.get("cnpj_02", "") if dados else '', disabled=False)
-        with col2:  
-            if local_realizado_02 == 'SIM':
-                uf_02 = st.text_input('UF:', max_chars= 50, value= empresa['uf'], disabled=True) 
-                tel_02 = st.text_input('Telefone:', max_chars= 50, value= empresa['telefone'],  disabled=True)
-            else:
-                uf_02 = st.text_input('UF:', max_chars= 50, 
-                                      value= dados.get("uf_02", "") if dados else '', disabled=False)  
-                tel_02 = st.text_input('Telefone:', max_chars= 50, 
-                                       value= dados.get("tel_02", "") if dados else '', disabled=False)   
-           
-        with col3:  
-            if local_realizado_02 == 'SIM':
-                cep_02 = st.text_input('CEP:', max_chars= 12, value= empresa['cep'], disabled=True)
-                email_02 = st.text_input('E-mail:', max_chars= 50, value= empresa['email'],  disabled=True) 
-            else:
-                cep_02 = st.text_input('CEP:', max_chars= 50, 
-                                      value= dados.get("cep_02", "") if dados else '', disabled=False)
-                email_02 = st.text_input('E-mail:', max_chars= 50, 
-                                         value= dados.get("email_02", "") if dados else '', disabled=False)
+            st.text_input(
+                'Endereço:',
+                value=proposta_selecionada.get("endereco", ""),
+                disabled=True
+            )
+            st.text_input(
+                'Cidade:',
+                value=proposta_selecionada.get("cidade", ""),
+                disabled=True
+            )
+            st.text_input(
+                'CNPJ:',
+                value=proposta_selecionada.get("cnpj", ""),
+                disabled=True
+            )
 
-
-    ################## Etapa 3 - Local de Realização dos Serviços  ##################
-    st.markdown(':orange-background[Etapa 3 - Local de Realização dos Serviços]')
-    container3 = st.container(border=True)
-    with container3:
-        col1, col2 = st.columns(2)
-        with col1:
-            local_teste_03  = st.text_input('Local de Teste:', max_chars= 20, 
-                                         value=dados.get("local_teste_03", "") if dados else "")
-            pessoa_local_03 = st.text_input('Pessoa Local:', max_chars= 20, 
-                                         value=dados.get("pessoa_local_03", "") if dados else "")
-            setor_03 = st.text_input('Setor:', max_chars= 30, value= dados.get("setor_03", "") if dados else "")
-            id_sala_03 = st.text_input('ID da Sala:', max_chars= 12, 
-                                     value=dados.get("id_sala_03", "") if dados else "")
-        with col2:   
-            dt_chegada_03 = st.text_input('Data e Hora - Chegada ao Local:',placeholder='DD-MM-AAAA HH:MM',
-                                       value=dados.get("dt_chegada_03", "") if dados else "")
-            hr_chegada_03 = st.text_input('Data e Hora - Chegada da Pessoa:',placeholder='DD-MM-AAAA HH:MM',
-                                       value=dados.get("hr_chegada_03", "") if dados else "")
-            cargo_03 = st.text_input('Cargo:',   max_chars= 50, value= dados.get("cargo_03", "") if dados else "")
-            pedido_03 = st.text_input('Número do Pedido:',
-                                       value=dados.get("pedido_03", "") if dados else "")
-        coment_03  = st.text_input('Complemento:', value= dados.get("coment_03", "") if dados else "")   
+        with col2:
+            st.text_input(
+                'UF:',
+                value=proposta_selecionada.get("uf", ""),
+                disabled=True
+            )
+            st.text_input(
+                'Telefone:',
+                value=proposta_selecionada.get("telefone", ""),
+                disabled=True
+            )
+            # Local de Realização dos Serviços (campo visível na Etapa 1)
+            st.text_input(
+                'Local de Realização:',
+                value=proposta_selecionada.get("local_realizacao", "Interno"),
+                disabled=True
+            )
+        with col3:
+            st.text_input(
+                'CEP:',
+                value=proposta_selecionada.get("cep", ""),
+                disabled=True
+            )
+            st.text_input(
+                'E-mail:',
+                value=proposta_selecionada.get("email", ""),
+                disabled=True
+            )
+        
+        
+        
+#        Local de Realização dos Serviços (campo visível na Etapa 1)
+#        st.write("**Local de Realização dos Serviços:**")
+#        st.text_input(
+#            'Local de Realização:',
+#            value=proposta_selecionada.get("local_realizacao", "Interno"),
+#           disabled=True,
+#            key="formulario_padrao_local_realizacao"
+#        )
+        
+    # Valores para compatibilidade com o resto do formulário
+    cliente = nome_empresa
+    endereco_02 = proposta_selecionada.get("endereco", "")
+    cidade_02 = proposta_selecionada.get("cidade", "")
+    uf_02 = proposta_selecionada.get("uf", "")
+    cep_02 = proposta_selecionada.get("cep", "")
+    cnpj_02 = proposta_selecionada.get("cnpj", "")
+    tel_02 = proposta_selecionada.get("telefone", "")
+    email_02 = proposta_selecionada.get("email", "")
+    local_realizado_02 = 'SIM'  # Padrão: localização do cadastro
     
-    ################## Etapa 4 - Checklist do local  ##################
-    st.markdown(':orange-background[Etapa 4 - Checklist do local]')   
-
-    try:
-       valor_ckl_ponto_04  = dados.get("ckl_ponto_04", "")
-       valor_ckl_espaco_04 = dados.get("ckl_espaco_04", "")   
-       valor_ckl_tomada_04 = dados.get("ckl_tomada_04", "")
-       valor_ckl_balan_04  = dados.get("ckl_balan_04", "")
-       valor_ckl_agua_04   = dados.get("ckl_agua_04", "")
-       valor_ckl_conex_04  = dados.get("ckl_conex_04", "")
-       valor_ckl_veda_04   = dados.get("ckl_veda_04", "")
-       valor_ckl_freez_04  = dados.get("ckl_freez_04", "")
-    except:
-       valor_ckl_ponto_04  = 'Não OK'
-       valor_ckl_espaco_04 = 'Não OK'   
-       valor_ckl_tomada_04 = 'Não OK'
-       valor_ckl_balan_04  = 'Não OK'
-       valor_ckl_agua_04   = 'Não OK'
-       valor_ckl_conex_04  = 'Não OK'
-       valor_ckl_veda_04   = 'Não OK'
-       valor_ckl_freez_04  = 'Não OK'
-
-    opcoes_ckl = ['OK', 'Não OK']
-    idx_ckl_ponto_04  = opcoes_ckl.index(valor_ckl_ponto_04)  if opcoes_ckl in opcoes_ckl  else 1
-    idx_ckl_espaco_04 = opcoes_ckl.index(valor_ckl_espaco_04) if opcoes_ckl in opcoes_ckl  else 1
-    idx_ckl_tomada_04 = opcoes_ckl.index(valor_ckl_tomada_04) if opcoes_ckl in opcoes_ckl  else 1
-    idx_ckl_balan_04  = opcoes_ckl.index(valor_ckl_balan_04)  if opcoes_ckl in opcoes_ckl  else 1
-    idx_ckl_agua_04   = opcoes_ckl.index(valor_ckl_agua_04)   if opcoes_ckl in opcoes_ckl  else 1
-    idx_ckl_conex_04  = opcoes_ckl.index(valor_ckl_conex_04)  if opcoes_ckl in opcoes_ckl  else 1
-    idx_ckl_veda_04   = opcoes_ckl.index(valor_ckl_veda_04)   if opcoes_ckl in opcoes_ckl  else 1
-    idx_ckl_freez_04  = opcoes_ckl.index(valor_ckl_freez_04)  if opcoes_ckl in opcoes_ckl  else 1
+    # Status da proposta selecionada
+    status_rel_01 = proposta_selecionada.get("status_rel_01", "Agendado")
+    dt_agendada_01 = proposta_selecionada.get("dt_agendada_01", "")
+    local_realizacao_01 = proposta_selecionada.get("local_realizacao", "Interno")
 
 
-    container4 = st.container(border=True)
-    with container4:
+    ################## Etapa 2 - Local de Realização dos Serviços  ##################
+    # Mostrar Etapa 2 somente se o local de realização for "Externo"
+    if local_realizacao_01 == "Externo":
+        st.markdown(':orange-background[Etapa 2 - Local de Realização dos Serviços]')
+        container3 = st.container(border=True)
+        with container3:
+            col1, col2 = st.columns(2)
+            with col1:
+                local_teste_03  = st.text_input('Local de Teste:', max_chars= 20, 
+                                             value=dados.get("local_teste_03", "") if dados else "")
+                pessoa_local_03 = st.text_input('Pessoa Local:', max_chars= 20, 
+                                             value=dados.get("pessoa_local_03", "") if dados else "")
+                setor_03 = st.text_input('Setor:', max_chars= 30, value= dados.get("setor_03", "") if dados else "")
+                id_sala_03 = st.text_input('ID da Sala:', max_chars= 12, 
+                                         value=dados.get("id_sala_03", "") if dados else "")
+            with col2:   
+                dt_chegada_03 = st.text_input('Data e Hora - Chegada ao Local:',placeholder='DD-MM-AAAA HH:MM',
+                                           value=dados.get("dt_chegada_03", "") if dados else "")
+                hr_chegada_03 = st.text_input('Data e Hora - Chegada da Pessoa:',placeholder='DD-MM-AAAA HH:MM',
+                                           value=dados.get("hr_chegada_03", "") if dados else "")
+                cargo_03 = st.text_input('Cargo:',   max_chars= 50, value= dados.get("cargo_03", "") if dados else "")
+                pedido_03 = st.text_input('Número do Pedido:',
+                                           value=dados.get("pedido_03", "") if dados else "")
+            coment_03  = st.text_input('Complemento:', value= dados.get("coment_03", "") if dados else "")   
+        
+        ################## Etapa 3 - Checklist do local  ##################
+        st.markdown(':orange-background[Etapa 3 - Checklist do local]')   
+
+        try:
+           valor_ckl_ponto_04  = dados.get("ckl_ponto_04", "")
+           valor_ckl_espaco_04 = dados.get("ckl_espaco_04", "")   
+           valor_ckl_tomada_04 = dados.get("ckl_tomada_04", "")
+           valor_ckl_balan_04  = dados.get("ckl_balan_04", "")
+           valor_ckl_agua_04   = dados.get("ckl_agua_04", "")
+           valor_ckl_conex_04  = dados.get("ckl_conex_04", "")
+           valor_ckl_veda_04   = dados.get("ckl_veda_04", "")
+           valor_ckl_freez_04  = dados.get("ckl_freez_04", "")
+        except:
+           valor_ckl_ponto_04  = 'Não OK'
+           valor_ckl_espaco_04 = 'Não OK'   
+           valor_ckl_tomada_04 = 'Não OK'
+           valor_ckl_balan_04  = 'Não OK'
+           valor_ckl_agua_04   = 'Não OK'
+           valor_ckl_conex_04  = 'Não OK'
+           valor_ckl_veda_04   = 'Não OK'
+           valor_ckl_freez_04  = 'Não OK'
+
         opcoes_ckl = ['OK', 'Não OK']
-        col1, col2 = st.columns(2)
-        with col1:
-            ckl_ponto_04 = st.radio('Ponto de Ar Comprimido Regulado e com Tubo de 6mm?', 
-                                    options=opcoes_ckl, index=idx_ckl_ponto_04,  horizontal=True)
-            ckl_espaco_04 = st.radio('Espaço da bancada: pelo menos 2000mm x 800mm', 
-                                    options=opcoes_ckl, index=idx_ckl_espaco_04, horizontal=True)
-            ckl_tomada_04 = st.radio('3 Tomadas padrão Nacional NBR14136',
-                                    options=opcoes_ckl, index=idx_ckl_tomada_04, horizontal=True)
-            ckl_balan_04 = st.radio('Estabilizador de Balança', 
-                                    options=opcoes_ckl, index=idx_ckl_balan_04,  horizontal=True)
-        with col2:    
-            ckl_agua_04 = st.radio('10L de água purificada (WFI) a temperatura ambiente (23-25ºC)', 
-                                    options=opcoes_ckl, index=idx_ckl_agua_04,  horizontal=True)
-            ckl_conex_04 = st.radio('Tubulações e conexões triclamps de 1” e ½”', 
-                                    options=opcoes_ckl, index=idx_ckl_conex_04, horizontal=True)
-            ckl_veda_04 = st.radio('Abraçadeiras e vedações triclamps', 
-                                    options=opcoes_ckl, index=idx_ckl_veda_04,  horizontal=True)
-            ckl_freez_04 = st.radio('Geladeira/Freezer ou Estufas', 
-                                    options=opcoes_ckl, index=idx_ckl_freez_04, horizontal=True)
+        idx_ckl_ponto_04  = opcoes_ckl.index(valor_ckl_ponto_04)  if valor_ckl_ponto_04 in opcoes_ckl  else 1
+        idx_ckl_espaco_04 = opcoes_ckl.index(valor_ckl_espaco_04) if valor_ckl_espaco_04 in opcoes_ckl  else 1
+        idx_ckl_tomada_04 = opcoes_ckl.index(valor_ckl_tomada_04) if valor_ckl_tomada_04 in opcoes_ckl  else 1
+        idx_ckl_balan_04  = opcoes_ckl.index(valor_ckl_balan_04)  if valor_ckl_balan_04 in opcoes_ckl  else 1
+        idx_ckl_agua_04   = opcoes_ckl.index(valor_ckl_agua_04)   if valor_ckl_agua_04 in opcoes_ckl  else 1
+        idx_ckl_conex_04  = opcoes_ckl.index(valor_ckl_conex_04)  if valor_ckl_conex_04 in opcoes_ckl  else 1
+        idx_ckl_veda_04   = opcoes_ckl.index(valor_ckl_veda_04)   if valor_ckl_veda_04 in opcoes_ckl  else 1
+        idx_ckl_freez_04  = opcoes_ckl.index(valor_ckl_freez_04)  if valor_ckl_freez_04 in opcoes_ckl  else 1
 
-        coment_04  = st.text_area('Comentários Checklist:', value= dados.get("coment_04", "") if dados else "")
 
-    ################## Etapa 5 - Checklist do local  ##################
-    st.markdown(':orange-background[Etapa 5 - Identificação do Material de Estudo]') 
+        container4 = st.container(border=True)
+        with container4:
+            opcoes_ckl = ['OK', 'Não OK']
+            col1, col2 = st.columns(2)
+            with col1:
+                ckl_ponto_04 = st.radio('Ponto de Ar Comprimido Regulado e com Tubo de 6mm?', 
+                                        options=opcoes_ckl, index=idx_ckl_ponto_04,  horizontal=True)
+                ckl_espaco_04 = st.radio('Espaço da bancada: pelo menos 2000mm x 800mm', 
+                                        options=opcoes_ckl, index=idx_ckl_espaco_04, horizontal=True)
+                ckl_tomada_04 = st.radio('3 Tomadas padrão Nacional NBR14136',
+                                        options=opcoes_ckl, index=idx_ckl_tomada_04, horizontal=True)
+                ckl_balan_04 = st.radio('Estabilizador de Balança', 
+                                        options=opcoes_ckl, index=idx_ckl_balan_04,  horizontal=True)
+            with col2:    
+                ckl_agua_04 = st.radio('10L de água purificada (WFI) a temperatura ambiente (23-25ºC)', 
+                                        options=opcoes_ckl, index=idx_ckl_agua_04,  horizontal=True)
+                ckl_conex_04 = st.radio('Tubulações e conexões triclamps de 1" e ½"', 
+                                        options=opcoes_ckl, index=idx_ckl_conex_04, horizontal=True)
+                ckl_veda_04 = st.radio('Abraçadeiras e vedações triclamps', 
+                                        options=opcoes_ckl, index=idx_ckl_veda_04,  horizontal=True)
+                ckl_freez_04 = st.radio('Geladeira/Freezer ou Estufas', 
+                                        options=opcoes_ckl, index=idx_ckl_freez_04, horizontal=True)
+
+            coment_04  = st.text_area('Comentários Checklist:', value= dados.get("coment_04", "") if dados else "")
+    else:
+        # Valores padrão para local_realizacao_01 != "Externo"
+        local_teste_03 = ""
+        pessoa_local_03 = ""
+        dt_chegada_03 = ""
+        hr_chegada_03 = ""
+        setor_03 = ""
+        cargo_03 = ""
+        id_sala_03 = ""
+        pedido_03 = ""
+        coment_03 = ""
+        valor_ckl_ponto_04  = 'Não OK'
+        valor_ckl_espaco_04 = 'Não OK'
+        valor_ckl_tomada_04 = 'Não OK'
+        valor_ckl_balan_04  = 'Não OK'
+        valor_ckl_agua_04   = 'Não OK'
+        valor_ckl_conex_04  = 'Não OK'
+        valor_ckl_veda_04   = 'Não OK'
+        valor_ckl_freez_04  = 'Não OK'
+        ckl_ponto_04 = 'Não OK'
+        ckl_espaco_04 = 'Não OK'
+        ckl_tomada_04 = 'Não OK'
+        ckl_balan_04 = 'Não OK'
+        ckl_agua_04 = 'Não OK'
+        ckl_conex_04 = 'Não OK'
+        ckl_veda_04 = 'Não OK'
+        ckl_freez_04 = 'Não OK'
+        
+        opcoes_ckl = ['OK', 'Não OK']
+        idx_ckl_ponto_04  = 1
+        idx_ckl_espaco_04 = 1
+        idx_ckl_tomada_04 = 1
+        idx_ckl_balan_04  = 1
+        idx_ckl_agua_04   = 1
+        idx_ckl_conex_04  = 1
+        idx_ckl_veda_04   = 1
+        idx_ckl_freez_04  = 1
+        
+        coment_04  = ""
+
+
+    ################## Etapa 4 - Checklist do local  ##################
+    st.markdown(':orange-background[Etapa 4 - Identificação do Material de Estudo]') 
 
     container5 = st.container(border=True)
     with container5:
@@ -284,8 +348,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
             volume_05 = st.text_input('Volume:', max_chars= 12, value=dados.get("volume_05", "") if dados else "")   
             tipo_gas_05 = st.radio('Tipo de gás exigido', options=opcoes_gas, index=idx_tipo_gas_05) 
 
-    ################## Etapa 6 - Lote / Catálogo / Serial  ##################
-    st.markdown(':orange-background[Etapa 6 - Lote / Catálogo / Serial]')
+    ################## Etapa 5 - Lote / Catálogo / Serial  ##################
+    st.markdown(':orange-background[Etapa 5 - Lote / Catálogo / Serial]')
     container6 = st.container(border=True)
 
     with container6:
@@ -304,8 +368,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
             serial_cat_disp_06 = st.text_input('Serial Dispositivo:', max_chars= 6, 
                                             value=dados.get("serial_cat_disp_06", "") if dados else "")    
 
-    ################## Etapa 7 - Formulação  ##################
-    st.markdown(':orange-background[Etapa 7 - Formulação]')
+    ################## Etapa 6 - Formulação  ##################
+    st.markdown(':orange-background[Etapa 6 - Formulação]')
     container7 = st.container(border=True)
     with container7:
         col1, col2 = st.columns(2)
@@ -335,8 +399,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
             conc_09_07 = st.text_input('Concentração 9:',   max_chars= 40, value= dados.get("conc_09_07", "") if dados else "")
             conc_10_07 = st.text_input('Concentração 10:',  max_chars= 40, value= dados.get("conc_10_07", "") if dados else "")
 
-    ################## Etapa 8 - Informações adicionais  ##################
-    st.markdown(':orange-background[Etapa 8 - Informações adicionais]')
+    ################## Etapa 7 - Informações adicionais  ##################
+    st.markdown(':orange-background[Etapa 7 - Informações adicionais]')
     try:
         valor_mat   = dados.get("ckl_mat_08", "")
         valor_sens  = dados.get("ckl_sens_08", "")   
@@ -359,8 +423,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
 
         estab_08 = st.text_input('Estabilidade do Produto:',  max_chars= 50, value= dados.get("estab_08", "") if dados else "")
 
-    ################## Etapa 9 - Início  ##################
-    st.markdown(':orange-background[Etapa 9 - Início]')
+    ################## Etapa 8 - Início  ##################
+    st.markdown(':orange-background[Etapa 8 - Início]')
     container9 = st.container(border=True)
     with container9:
         col1, col2, col3, col4 = st.columns(4)
@@ -423,8 +487,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
         with col2:
             hr_wfi_09 = st.text_input('Hora:',placeholder='HH:MM', value=dados.get("hr_wfi_09", "") if dados else "")
         
-    ################## Etapa 10 - Tempo de contato  ##################   
-    st.markdown(':orange-background[Etapa 10 - Tempo de contato]')
+    ################## Etapa 9 - Tempo de contato  ##################   
+    st.markdown(':orange-background[Etapa 9 - Tempo de contato]')
     container10 = st.container(border=True)
     with container10:
         texto1 = 'Realizar a análise visual.'
@@ -471,8 +535,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
             prd_id2_10 = st.text_input('ID #2 Produto:', max_chars= 20, value=dados.get("prd_id2_10", "") if dados else "")
             prd_id3_10 = st.text_input('ID #3 Produto:', max_chars= 20, value=dados.get("prd_id3_10", "") if dados else "")   
 
-    ################## Etapa 11 - Cálculo da Vazão Final  ##################
-    st.markdown(':orange-background[Etapa 11 - Cálculo da Vazão Final]')
+    ################## Etapa 10 - Cálculo da Vazão Final  ##################
+    st.markdown(':orange-background[Etapa 10 - Cálculo da Vazão Final]')
     container11 = st.container(border=True)
     with container11:
         # texto1 = 'Enxaguar as membranas para o medir vazão final'
@@ -489,8 +553,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
             tmp_final3_11 = st.text_input('Tempo Final #3', max_chars= 5, placeholder='MM:SS', 
                                        value=dados.get("tmp_final3_11", "") if dados else "")
 
-    ################## Etapa 12 - Teste de Integridade com Fluido Padrao - Final  ##################           
-    st.markdown(':orange-background[Etapa 12 - Teste de Integridade com Fluido Padrao - Final]')
+    ################## Etapa 11 - Teste de Integridade com Fluido Padrao - Final  ##################           
+    st.markdown(':orange-background[Etapa 11 - Teste de Integridade com Fluido Padrao - Final]')
     container12 = st.container(border=True)
     with container12:
         texto1 = 'Enxaguar as membranas para teste de Integridade com Fluido Padrão Final'
@@ -516,8 +580,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
             id_padr3_12 = st.text_input('ID #3:', max_chars= 20, value=dados.get("id_padr3_12", "") if dados else "") 
 
 
-    ################## Etapa 13 - Aferiçao de Massa Final  ##################
-    st.markdown(':orange-background[Etapa 13 - Aferiçao de Massa Final]')
+    ################## Etapa 12 - Aferiçao de Massa Final  ##################
+    st.markdown(':orange-background[Etapa 12 - Aferiçao de Massa Final]')
     container13 = st.container(border=True)
     with container13:
         texto1 = 'Secar as membranas antes da pesagem'
@@ -535,8 +599,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
             pf_memb_3_13 = st.number_input('Peso Final #3:', format=format_3casas, step=0.01, 
                                         value=float(dados.get("pf_memb_3_13", 0.0)) if dados else 0.0)
 
-    ################## Etapa 14 - Teste de Integridade - Dispositivo  ##################        
-    st.markdown(':orange-background[Etapa 14 - Teste de Integridade - Dispositivo]')
+    ################## Etapa 13 - Teste de Integridade - Dispositivo  ##################        
+    st.markdown(':orange-background[Etapa 13 - Teste de Integridade - Dispositivo]')
     container14 = st.container(border=True)
     with container14:
         col1, col2 = st.columns(2)
@@ -571,8 +635,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
             dis_id2_14 = st.text_input('ID #2 Dispositivo:', max_chars= 20, value=dados.get("dis_id2_14", "") if dados else "")
         
     
-    ################## Etapa 15 - Critérios de Avaliação  ##################
-    st.markdown(':orange-background[Etapa 15 - Critérios de Avaliação]')    
+    ################## Etapa 14 - Critérios de Avaliação  ##################
+    st.markdown(':orange-background[Etapa 14 - Critérios de Avaliação]')    
     container15 = st.container(border=True)
     with container15:
         coluna_1, coluna_2 = st.columns([1,1])
@@ -587,6 +651,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
                                              value=float(dados.get("crit_var_vazao_15", 0.0)) if dados else 10.0)
     
     return {
+        'id_proposta': id_proposta,
+        'num_proposta': num_proposta,
         'relatorio': relatorio.strip(),
         'status_rel_01': status_rel_01.strip(),
         'dt_agendada_01': dt_agendada_01.strip() if dt_agendada_01 is not None else None, #### dt_agendada_01.strip(),

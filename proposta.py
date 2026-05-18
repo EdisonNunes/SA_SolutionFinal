@@ -47,14 +47,34 @@ def gerar_proxima_proposta(last_proposta: str) -> str:
         # Fallback para formato inválido
         return f"C-{ano_atual}001"
 
+
+def preparar_dados_proposta(dados: dict) -> dict:
+    """Retorna apenas os campos válidos para a tabela propostas."""
+    campos_validos = {
+        "id_cliente",
+        "num_proposta",
+        "status_rel_01",
+        "local_realizacao",
+        "dt_agendada_01",
+        "dt_emissao_rel_01",
+        "motivo_cancelamento",
+        "data_emissao",
+        "validade",
+        "cond_pagamento",
+        "referencia",
+    }
+    return {k: v for k, v in dados.items() if k in campos_validos}
+
 # =========================================
 # DADOS AUXILIARES
 # =========================================
-clientes = supabase.table("clientes").select("id, empresa").order('empresa').execute().data
+clientes = supabase.table("clientes").select("id, empresa, cidade, endereco, uf, cep, cnpj, telefone, email").order('empresa').execute().data
 servicos = supabase.table("servicos").select("*").order('codigo').execute().data
 
 map_clientes = {c["empresa"]: c["id"] for c in clientes}
 map_servicos = {s["codigo"]: s for s in servicos}
+
+combo_clientes = [f"{c['empresa']} - {c['cidade']}" for c in clientes]
 
 # =========================================
 # FUNÇÕES REUTILIZÁVEIS
@@ -117,23 +137,20 @@ def exibir_busca_servicos(key_suffix, on_add_callback):
             lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
         
-        df_exibicao["Selecionar"] = ""
+        df_exibicao["Selecionar"] = False
         
         cols = ["Selecionar", "codigo", "descricao", "valor_formatado", "tipo"]
         
-        selecao = st.dataframe(
-            df_exibicao[cols],
+        selecao = st.data_editor(
+            df_exibicao[cols].reset_index(drop=True),
             hide_index=True,
-            width='content',
             column_config={
-                "Selecionar": st.column_config.TextColumn("Selecionar", help="Clique na linha para selecionar"),
+                "Selecionar": st.column_config.CheckboxColumn("Selecionar", help="Marque para selecionar"),
                 "codigo": st.column_config.TextColumn("Código"),
                 "descricao": st.column_config.TextColumn("Descrição"),
-                "valor_formatado": st.column_config.TextColumn("Valor(R$)"),
+                "valor_formatado": st.column_config.TextColumn("Valor"),
                 "tipo": st.column_config.TextColumn("Tipo"),
             },
-            selection_mode="single-row",
-            on_select="rerun",
             key=f"grid_servicos{key_suffix}"
         )
 
@@ -151,15 +168,15 @@ def exibir_busca_servicos(key_suffix, on_add_callback):
             st.rerun()
 
         # 4, 5 e 6) LÓGICA DE SELEÇÃO E INPUTS
-        indices_selecionados = selecao.get("selection", {}).get("rows", [])
+        selecionados = selecao[selecao["Selecionar"] == True]
         
-        if indices_selecionados:
-            index = indices_selecionados[0]
+        if len(selecionados) == 1:
+            index = selecionados.index[0]
             serv_selecionado = servicos_exibidos[index]
 
             preco_servico = formatar_moeda_br(float(serv_selecionado['valor']))
             texto1 = f"{serv_selecionado['codigo']} :material/move_item: {serv_selecionado['descricao']}"
-            texto2 = f"Valor : R$ {preco_servico}"
+            texto2 = f"Valor : {preco_servico}"
             st.success(f'ITEM SELECIONADO \n###### :point_right: {texto1} \n###### :point_right: {texto2} ')
 
             col_prazo, col_qtd, col_desc = st.columns([1.3, 1, 1])
@@ -182,8 +199,10 @@ def exibir_busca_servicos(key_suffix, on_add_callback):
                     "desconto": desconto
                 }
                 on_add_callback(item_data)
+        elif len(selecionados) > 1:
+            st.error("Selecione apenas 1 serviço por vez.")
         else:
-            st.info("Clique em uma linha da tabela acima para selecionar o serviço.")
+            st.info("Marque a caixa na linha da tabela acima para selecionar o serviço.")
 
 
 # =========================================
@@ -208,18 +227,110 @@ with aba[0]:
     ultima_proposta = ler_last_proposta()
     proxima_proposta = gerar_proxima_proposta(ultima_proposta)
     st.subheader(f":orange[Proposta {proxima_proposta}]")
-    col1, col2, col3 = st.columns(3)
 
-			  
-    empresa = col1.selectbox("Cliente", map_clientes.keys(), key="nova_cliente")
-    id_cliente = map_clientes[empresa]
+    ################## Etapa 1 - Identificação do Cliente  ##################
+    st.markdown(':orange-background[Identificação do Cliente]')
 
-    data_emissao = col2.date_input("Data de Emissão", value=date.today(), key="nova_data_emissao", format="DD/MM/YYYY")
-    validade = col3.text_input("Validade", placeholder="Exemplo : 15 DDL", key='nova_validade')
-    
-    col4, col5, col6 = st.columns(3)
-    
-    cond_pagamento = col4.text_input("Cond. Pagamento", placeholder="Exemplo : 30 DDL", key='nova_cond_pagamento')
+    container_cliente = st.container(border=True)
+    with container_cliente:
+        cliente = st.selectbox("Empresa:", combo_clientes, index=0, key="nova_cliente")
+
+        nome_empresa = cliente.split(' - ')[0].strip()
+        cidade_sel = cliente.split(' - ')[1].strip()
+
+        empresa_data = next((c for c in clientes if c['empresa'] == nome_empresa and c['cidade'] == cidade_sel), None)
+
+        if empresa_data:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                endereco = st.text_input('Endereço:', value=empresa_data['endereco'], disabled=True)
+                cidade_input = st.text_input('Cidade:', value=empresa_data['cidade'], disabled=True)
+            with col2:
+                uf = st.text_input('UF:', value=empresa_data['uf'], disabled=True)
+                tel = st.text_input('Telefone:', value=empresa_data['telefone'], disabled=True)
+            with col3:
+                cep = st.text_input('CEP:', value=empresa_data['cep'], disabled=True)
+                email = st.text_input('E-mail:', value=empresa_data['email'], disabled=True)
+                cnpj = st.text_input('CNPJ:', value=empresa_data['cnpj'], disabled=True)
+
+        id_cliente = empresa_data['id'] if empresa_data else None
+
+    ################## Detalhes da Proposta  ##################
+    st.markdown(':orange-background[Detalhes da Proposta]')
+    container_proposta = st.container(border=True)
+    with container_proposta:
+        opcoes = ['Pendente', 'Agendado', 'Cancelado']
+        ajuda = '''
+            🕗 Pendente: Aguardando pedido do cliente\n
+            📅 Agendado: Preenchimento de dados não envolvidos com cálculos\n
+            ❌ Cancelado: Relatório suspenso\n
+        '''
+
+        col_status, col_local = st.columns(2)
+        with col_status:
+            status_rel_01 = st.radio(
+                'Status Atual',
+                options=opcoes,
+                index=1,
+                horizontal=True,
+                help=ajuda
+            )
+
+        with col_local:
+            local_realizacao = st.radio(
+                'Local de Realização dos serviços',
+                options=['Interno', 'Externo'],
+                format_func=lambda x: 'Laboratório Interno' if x == 'Interno' else 'Laboratório Externo',
+                index=0,
+                horizontal=True,
+                key='nova_local_realizacao'
+            )
+
+        dt_agendada_01 = None
+        dt_emissao_01 = None
+        motivo_01 = ''
+
+        col_data_1, col_data_2 = st.columns(2)
+        with col_data_1:
+            dt_agendada_01 = st.date_input(
+                'Data Agendada',
+                key='nova_dt_agendada_01',
+                format='DD/MM/YYYY'
+            )
+
+        with col_data_2:
+            dt_emissao_01 = st.date_input(
+                'Data de emissão do Relatório Preliminar',
+                key='nova_dt_emissao_01',
+                format='DD/MM/YYYY'
+            )
+
+        col_emissao_prop, col_validade_prop = st.columns(2)
+        with col_emissao_prop:
+            data_emissao = st.date_input(
+                'Data de Emissão da Proposta',
+                value=date.today(),
+                key='nova_data_emissao',
+                format='DD/MM/YYYY'
+            )
+
+        with col_validade_prop:
+            pass
+
+        if status_rel_01 == 'Cancelado':
+            motivo_01 = st.text_area(
+                'Motivo do cancelamento:',
+                placeholder='Digite o motivo do cancelamento',
+                key='nova_motivo_01',
+                height=120
+            )
+
+        col_validade, col_cond = st.columns(2)
+        with col_validade:
+            validade = st.text_input("Validade", placeholder="Exemplo : 15 DDL", key='nova_validade')
+        with col_cond:
+            cond_pagamento = st.text_input("Cond. Pagamento", placeholder="Exemplo : 30 DDL", key='nova_cond_pagamento')
+
     # Retirada a pedido do Leandro referencia = col5.text_input("Referência", key="nova_referencia")
     referencia = ''
 
@@ -261,13 +372,13 @@ with aba[0]:
             col3.write(item["descricao_servico"])
             col4.write(item["prazo_ddl"])
             col5.write(str(item["qtd"]))
-            col6.write(f"R$ {formatar_moeda_br(total_item)}")
+            col6.write(f" {formatar_moeda_br(total_item)}")
 
             if col6.button("🗑", key=f"del_temp_{idx}"):
                 st.session_state.itens_novos.pop(idx - 1)
                 st.rerun()
 
-    st.success(f"💰 Total parcial da proposta: R$ {formatar_moeda_br(total_proposta)}")
+    st.success(f"💰 Total parcial da proposta: {formatar_moeda_br(total_proposta)}")
 
     if st.button("💾 Salvar Proposta", key="btn_salvar_proposta"):
         # =========================
@@ -294,14 +405,20 @@ with aba[0]:
         # =========================
         # Criar proposta
         # =========================
-        id_prop = criar_proposta({
+        payload_proposta = preparar_dados_proposta({
             "id_cliente": id_cliente,
             "num_proposta": proxima_proposta,
-            "data_emissao": data_emissao.isoformat(), # ✅ YYYY-MM-DD
+            "status_rel_01": status_rel_01,
+            "local_realizacao": local_realizacao,
+            "data_emissao": data_emissao.isoformat(),
+            "dt_agendada_01": dt_agendada_01.isoformat() if dt_agendada_01 else None,
+            "dt_emissao_rel_01": dt_emissao_01.isoformat() if dt_emissao_01 else None,
+            "motivo_cancelamento": motivo_01,
             "validade": validade,
             "cond_pagamento": cond_pagamento,
             "referencia": referencia
         })
+        id_prop = criar_proposta(payload_proposta)
 
         for item in st.session_state.itens_novos:
             adicionar_item(id_prop, item)
@@ -331,6 +448,25 @@ with aba[1]:
     if "edit_mode" not in st.session_state:
         st.session_state.edit_mode = False
 
+    if "edit_data_emissao" not in st.session_state:
+        st.session_state.edit_data_emissao = date.today()
+    if "edit_referencia" not in st.session_state:
+        st.session_state.edit_referencia = ""
+    if "edit_validade" not in st.session_state:
+        st.session_state.edit_validade = ""
+    if "edit_cond_pagamento" not in st.session_state:
+        st.session_state.edit_cond_pagamento = ""
+    if "edit_status_rel_01" not in st.session_state:
+        st.session_state.edit_status_rel_01 = "Agendado"
+    if "edit_local_realizacao" not in st.session_state:
+        st.session_state.edit_local_realizacao = "Interno"
+    if "edit_dt_agendada_01" not in st.session_state:
+        st.session_state.edit_dt_agendada_01 = date.today()
+    if "edit_dt_emissao_rel_01" not in st.session_state:
+        st.session_state.edit_dt_emissao_rel_01 = date.today()
+    if "edit_motivo_cancelamento" not in st.session_state:
+        st.session_state.edit_motivo_cancelamento = ""
+
     # -------------------------------
     # BUSCA
     # -------------------------------
@@ -354,23 +490,6 @@ with aba[1]:
         format_func=lambda x: f"{x['num_proposta']}  👉  {x['empresa']}",
         key="busca_select_proposta"
     )
-
-    # -------------------------------
-    # DETECTA TROCA DE PROPOSTA
-    # -------------------------------
-    if st.session_state.edit_id_proposta != proposta_sel["id_proposta"]:
-        st.session_state.edit_id_proposta = proposta_sel["id_proposta"]
-        st.session_state.edit_mode = False  # volta para leitura
-
-        st.session_state.edit_data_emissao = (
-            datetime.strptime(proposta_sel["data_emissao"], "%Y-%m-%d").date()
-            if proposta_sel["data_emissao"]
-            else date.today()
-        )
-
-        st.session_state.edit_referencia = proposta_sel.get("referencia", "")
-        st.session_state.edit_validade = proposta_sel.get("validade", "")
-        st.session_state.edit_cond_pagamento = proposta_sel.get("cond_pagamento", "")
 
     id_prop = proposta_sel["id_proposta"]
     num_proposta = proposta_sel["num_proposta"]
@@ -399,6 +518,7 @@ with aba[1]:
             erro = False
             temp_docx = None
             proposta_name = f'Proposta_{num_proposta}'
+            pdf_bytes = None
             try: 
                # 1. Gerar DOCX temporário  
                with st.spinner('Gerando documento ...', show_time=True):
@@ -411,14 +531,6 @@ with aba[1]:
                     #print("Convertendo para PDF via CloudConvert...")
                     pdf_bytes = converter_para_pdf(temp_docx)
 
-                # 3. Disponibilizar para Download
-                    st.download_button(
-                        label="Clique aqui para baixar o PDF",
-                        data=pdf_bytes,
-                        file_name=f"Proposta_{proposta_name}.pdf",
-                        mime="application/pdf"
-                    )
-
             except UnauthorizedAccess:
                 st.error("Erro de API: Chave do CloudConvert inválida ou e-mail não verificado.", icon="🚨")
                 erro = True
@@ -426,53 +538,158 @@ with aba[1]:
                 st.error(f"Erro Inesperado: {str(e)}", icon="🚨")
                 erro = True
             finally:
-                # 4. Tratamento dos arquivos temporários
                 if temp_docx and os.path.exists(temp_docx):
                     if not erro:
-                        # Se deu tudo certo, apaga o Word
                         os.remove(temp_docx)
-                    else:
-                        # Se houve erro, oferece o download do WORD como alternativa
-                       st.warning(f'Baixe o arquivo Proposta_{proposta_name}.docx e faça a conversão para PDF no site : https://cloudconvert.com/ ')
-                       with open(temp_docx, "rb") as file:
-                            btn_docx = st.download_button(
-                                label=f"📥 Baixar  Proposta_{proposta_name}.docx",
-                                data=file,
-                                file_name=f"Proposta_{proposta_name}.docx",
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                            )
-    else:            
-        col_btn2.button("📄 Gerar PDF", key="btn_word_disabled", disabled=True)        
+
+            if not erro and pdf_bytes is not None:
+                st.download_button(
+                    label="Clique aqui para baixar o PDF",
+                    data=pdf_bytes,
+                    file_name=f"Proposta_{proposta_name}.pdf",
+                    mime="application/pdf"
+                )
+            elif erro and temp_docx and os.path.exists(temp_docx):
+                st.warning(
+                    f'Baixe o arquivo Proposta_{proposta_name}.docx e faça a conversão para PDF no site : https://cloudconvert.com/'
+                )
+                with open(temp_docx, "rb") as file:
+                    st.download_button(
+                        label=f"📥 Baixar  Proposta_{proposta_name}.docx",
+                        data=file,
+                        file_name=f"Proposta_{proposta_name}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    )
+    else:
+        col_btn2.button("📄 Gerar PDF", key="btn_word_disabled", disabled=True)
     # -------------------------------
     # CAMPOS DA PROPOSTA
     # -------------------------------
-    col1, col2, col3 = st.columns(3)
-    nova_data_emissao = col1.date_input(
-        "Data de Emissão",
-        key="edit_data_emissao",
-        format="DD/MM/YYYY",
-        disabled=not st.session_state.edit_mode
-    )
+    st.markdown(':orange-background[Detalhes da Proposta]')
+    
+    # Garantir que os dados estão sempre carregados da proposta selecionada
+    if st.session_state.edit_id_proposta != proposta_sel["id_proposta"]:
+        st.session_state.edit_id_proposta = proposta_sel["id_proposta"]
+        st.session_state.edit_mode = False
 
-    # Retirada a pedido do Leandro
-    # nova_ref = st.text_input(
-    #     "Referência",
-    #     key="edit_referencia",
-    #     disabled=not st.session_state.edit_mode
-    # )
-    nova_ref = ''
+        # Carregar dados da proposta para os campos de edição
+        try:
+            st.session_state.edit_data_emissao = (
+                datetime.strptime(proposta_sel["data_emissao"], "%Y-%m-%d").date()
+                if proposta_sel.get("data_emissao") else date.today()
+            )
+        except (ValueError, TypeError):
+            st.session_state.edit_data_emissao = date.today()
 
-    nova_validade = col2.text_input(
-        "Validade",
-        key="edit_validade",
-        disabled=not st.session_state.edit_mode
-    )
+        st.session_state.edit_referencia = proposta_sel.get("referencia", "") or ""
+        st.session_state.edit_validade = proposta_sel.get("validade", "") or ""
+        st.session_state.edit_cond_pagamento = proposta_sel.get("cond_pagamento", "") or ""
+        status_atual = proposta_sel.get("status_rel_01", "Agendado") or "Agendado"
+        if status_atual not in ["Pendente", "Agendado", "Cancelado"]:
+            status_atual = "Agendado"
+        st.session_state.edit_status_rel_01 = status_atual
+        st.session_state.edit_local_realizacao = proposta_sel.get("local_realizacao", "Interno") or "Interno"
+        
+        try:
+            st.session_state.edit_dt_agendada_01 = (
+                datetime.strptime(proposta_sel["dt_agendada_01"], "%Y-%m-%d").date()
+                if proposta_sel.get("dt_agendada_01") else date.today()
+            )
+        except (ValueError, TypeError):
+            st.session_state.edit_dt_agendada_01 = date.today()
+        
+        try:
+            st.session_state.edit_dt_emissao_rel_01 = (
+                datetime.strptime(proposta_sel["dt_emissao_rel_01"], "%Y-%m-%d").date()
+                if proposta_sel.get("dt_emissao_rel_01") else date.today()
+            )
+        except (ValueError, TypeError):
+            st.session_state.edit_dt_emissao_rel_01 = date.today()
+        
+        st.session_state.edit_motivo_cancelamento = proposta_sel.get("motivo_cancelamento", "") or ""
 
-    nova_cond = col3.text_input(
-        "Cond. Pagamento",
-        key="edit_cond_pagamento",
-        disabled=not st.session_state.edit_mode
-    )
+    container_edit = st.container(border=True)
+    with container_edit:
+        opcoes_status = ['Pendente', 'Agendado', 'Cancelado']
+        
+        col_status_edit, col_local_edit = st.columns(2)
+        with col_status_edit:
+            nova_status = st.radio(
+                'Status Atual',
+                options=opcoes_status,
+                horizontal=True,
+                key='edit_status_rel_01',
+                disabled=not st.session_state.edit_mode
+            )
+        
+        with col_local_edit:
+            nova_local = st.radio(
+                'Local de Realização dos serviços',
+                options=['Interno', 'Externo'],
+                format_func=lambda x: 'Laboratório Interno' if x == 'Interno' else 'Laboratório Externo',
+                horizontal=True,
+                key='edit_local_realizacao',
+                disabled=not st.session_state.edit_mode
+            )
+        
+        col_data_1_edit, col_data_2_edit = st.columns(2)
+        with col_data_1_edit:
+            nova_dt_agendada = st.date_input(
+                'Data Agendada',
+                value=st.session_state.edit_dt_agendada_01,
+                key='edit_dt_agendada_01',
+                format='DD/MM/YYYY',
+                disabled=not st.session_state.edit_mode
+            )
+        
+        with col_data_2_edit:
+            nova_dt_emissao_rel = st.date_input(
+                'Data de emissão do Relatório Preliminar',
+                value=st.session_state.edit_dt_emissao_rel_01,
+                key='edit_dt_emissao_rel_01',
+                format='DD/MM/YYYY',
+                disabled=not st.session_state.edit_mode
+            )
+        
+        if nova_status == 'Cancelado':
+            nova_motivo = st.text_area(
+                'Motivo do cancelamento:',
+                placeholder='Digite o motivo do cancelamento',
+                value=st.session_state.edit_motivo_cancelamento,
+                key='edit_motivo_cancelamento',
+                height=120,
+                disabled=not st.session_state.edit_mode
+            )
+        else:
+            nova_motivo = st.session_state.edit_motivo_cancelamento
+        
+        col1, col2, col3 = st.columns(3)
+        nova_data_emissao = col1.date_input(
+            "Data de Emissão",
+            key="edit_data_emissao",
+            format="DD/MM/YYYY",
+            disabled=not st.session_state.edit_mode
+        )
+
+        # Retirada a pedido do Leandro
+        # nova_ref = st.text_input(
+        #     "Referência",
+        #     key="edit_referencia",
+        #     disabled=not st.session_state.edit_mode
+        # )
+        nova_ref = ''
+
+        nova_validade = col2.text_input(
+            "Validade",
+            key="edit_validade",
+            disabled=not st.session_state.edit_mode
+        )
+
+        nova_cond = col3.text_input(
+            "Cond. Pagamento",
+            key="edit_cond_pagamento",
+            disabled=not st.session_state.edit_mode
+        )
 
     # -------------------------------
     # AÇÕES DA PROPOSTA
@@ -481,12 +698,18 @@ with aba[1]:
         col_save, col_del, col_back = st.columns([1,1,1])
 
         if col_save.button("💾 Salvar Alterações", key="edit_btn_salvar"):
-            atualizar_proposta(id_prop, {
+            payload_proposta = preparar_dados_proposta({
+                "status_rel_01": nova_status,
+                "local_realizacao": nova_local,
                 "data_emissao": nova_data_emissao.isoformat(),
+                "dt_agendada_01": nova_dt_agendada.isoformat() if nova_dt_agendada else None,
+                "dt_emissao_rel_01": nova_dt_emissao_rel.isoformat() if nova_dt_emissao_rel else None,
+                "motivo_cancelamento": nova_motivo,
                 "referencia": nova_ref,
                 "validade": nova_validade,
                 "cond_pagamento": nova_cond
             })
+            atualizar_proposta(id_prop, payload_proposta)
             st.success("✅ Proposta atualizada")
             st.session_state.edit_mode = False
             st.rerun()
@@ -538,7 +761,7 @@ with aba[1]:
                     disabled=not st.session_state.edit_mode
                 )
 
-                st.write(f"💰 Total do item: R$ {formatar_moeda_br(total_item)}")
+                st.write(f"💰 Total do item:  {formatar_moeda_br(total_item)}")
 
                 if st.session_state.edit_mode:
                     col_i1, col_i2 = st.columns(2)
@@ -590,5 +813,5 @@ with aba[1]:
             if st.button("Cancelar Adição", key="btn_cancel_add_item"):
                  st.session_state.edit_adding_item = False
                  st.rerun()
-    st.info(f"💰 Total da Proposta: R$ {formatar_moeda_br(total)}")
+    st.info(f"💰 Total da Proposta:  {formatar_moeda_br(total)}")
 
