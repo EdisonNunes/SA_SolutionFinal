@@ -140,88 +140,88 @@ def ShowWarning(dados, condicao):
     if dados['cat_membr_05'] == '' : 
         dict_warning['Nº Catálogo da Membrana']= 'Etapa 5'
     if dados['poro_cat_membr_05'] == '' : 
-        dict_warning['Poro']= 'Etapa 5'
+        dict_warning['Poro']= 'Etapa 4'
     if dados['temp_filtra_05'] == '' : 
-        dict_warning['Temperatura de Filtração (°C)']= 'Etapa 5'
+        dict_warning['Temperatura de Filtração (°C)']= 'Etapa 4'
     if dados['tara_05'] == '' : 
-        dict_warning['Tara da Balança (g)']= 'Etapa 5' 
+        dict_warning['Tara da Balança (g)']= 'Etapa 4' 
     if dados['produto_05'] == '' : 
-        dict_warning['Produto']= 'Etapa 5'       
+        dict_warning['Produto']= 'Etapa 4'       
     if dados['tmp_contato_05'] == '' : 
-        dict_warning['Tempo de contato (h)']= 'Etapa 5'
+        dict_warning['Tempo de contato (h)']= 'Etapa 4'
     if dados['tempera_local_05'] == '' : 
-        dict_warning['Temperatura Local (°C)']= 'Etapa 5'                 
+        dict_warning['Temperatura Local (°C)']= 'Etapa 4'                 
     if dados['lote_05'] == '' : 
-        dict_warning['Lote Do Produto']= 'Etapa 5'
+        dict_warning['Lote Do Produto']= 'Etapa 4'
     if dados['armaz_05'] == '' : 
-        dict_warning['Armazenagem Local']= 'Etapa 5'
+        dict_warning['Armazenagem Local']= 'Etapa 4'
     if dados['umidade_05'] == '' : 
-        dict_warning['Umidade (%)']= 'Etapa 5'
+        dict_warning['Umidade (%)']= 'Etapa 4'
     if dados['volume_05'] == '' : 
-        dict_warning['Volume']= 'Etapa 5'
+        dict_warning['Volume']= 'Etapa 4'
     if dados['area_mem_05'] == '' : 
-        dict_warning['Area efetiva da membrana']= 'Etapa 5'
+        dict_warning['Area efetiva da membrana']= 'Etapa 4'
     if dados['area_dis_05'] == '' : 
-        dict_warning['Area efetiva do dispositivo']= 'Etapa 5'
+        dict_warning['Area efetiva do dispositivo']= 'Etapa 4'
 
     if dados['lotem1_06'] == '' : 
-        dict_warning['Lote Membrana #1']= 'Etapa 6'
+        dict_warning['Lote Membrana #1']= 'Etapa 5'
     if dados['lotem2_06'] == '' : 
-        dict_warning['Lote Membrana  #2']= 'Etapa 6'
+        dict_warning['Lote Membrana  #2']= 'Etapa 5'
     if dados['lotem3_06'] == '' : 
-        dict_warning['Lote Membrana  #3']= 'Etapa 6'
+        dict_warning['Lote Membrana  #3']= 'Etapa 5'
     if dados['lotes1_06'] == '' : 
-        dict_warning['Lote Serial #1']= 'Etapa 6'
+        dict_warning['Lote Serial #1']= 'Etapa 5'
     if dados['lotes2_06'] == '' : 
-        dict_warning['Lote Serial #2']= 'Etapa 6'
+        dict_warning['Lote Serial #2']= 'Etapa 5'
     if dados['lotes3_06'] == '' : 
-        dict_warning['Lote Serial #3']= 'Etapa 6'
+        dict_warning['Lote Serial #3']= 'Etapa 5'
     if dados['cat_disp_06'] == '' : 
-        dict_warning['Catálogo do Dispositivo']= 'Etapa 6'
+        dict_warning['Catálogo do Dispositivo']= 'Etapa 5'
     if dados['lote_disp_06'] == '' : 
-        dict_warning['Lote do Dispositivo']= 'Etapa 6'
+        dict_warning['Lote do Dispositivo']= 'Etapa 5'
     if dados['serial_cat_disp_06'] == '' : 
-        dict_warning['Serial Dispositivo']= 'Etapa 6'
+        dict_warning['Serial Dispositivo']= 'Etapa 5'
 
     # if dados['estab_08'] == '' : 
     #     dict_warning['Estabilidade do Produto']= 'Etapa 8'
 
     if dados['wfi_res1_09'] == '' : 
-        dict_warning['Fluido Padrão ID #1']= 'Etapa 9'
+        dict_warning['Fluido Padrão ID #1']= 'Etapa 8'
     if dados['wfi_res2_09'] == '' : 
-        dict_warning['Fluido Padrão ID #2']= 'Etapa 9'
+        dict_warning['Fluido Padrão ID #2']= 'Etapa 8'
     if dados['wfi_res3_09'] == '' : 
-        dict_warning['Fluido Padrão ID #3']= 'Etapa 9'
+        dict_warning['Fluido Padrão ID #3']= 'Etapa 8'
     if dados['dt_wfi_09'] == '' : 
-        dict_warning['Data']= 'Etapa 9'
+        dict_warning['Data']= 'Etapa 8'
     if dados['hr_wfi_09'] == '' : 
-        dict_warning['Hora']= 'Etapa 9'
+        dict_warning['Hora']= 'Etapa 8'
 
     if dados['dt_wfip_10'] == '' : 
-        dict_warning['Data Final']= 'Etapa 10'
+        dict_warning['Data Final']= 'Etapa 9'
     if dados['hr_wfip_10'] == '' : 
-        dict_warning['Hora Final']= 'Etapa 10'
+        dict_warning['Hora Final']= 'Etapa 9'
     if dados['prd_id1_10'] == '' : 
-        dict_warning['ID #1 Produto']= 'Etapa 10'
+        dict_warning['ID #1 Produto']= 'Etapa 9 '
     if dados['prd_id2_10'] == '' : 
-        dict_warning['ID #2 Produto']= 'Etapa 10'
+        dict_warning['ID #2 Produto']= 'Etapa 9'
     if dados['prd_id3_10'] == '' : 
-        dict_warning['ID #3 Produto']= 'Etapa 10'
+        dict_warning['ID #3 Produto']= 'Etapa 9'
 
     if dados['id_padr1_12'] == '' : 
-        dict_warning['ID #1']= 'Etapa 12'
+        dict_warning['ID #1']= 'Etapa 11'
     if dados['id_padr2_12'] == '' : 
-        dict_warning['ID #2']= 'Etapa 12'
+        dict_warning['ID #2']= 'Etapa 11'
     if dados['id_padr3_12'] == '' : 
-        dict_warning['ID #3']= 'Etapa 12'
+        dict_warning['ID #3']= 'Etapa 11    '
 
     if dados['dis_id1_14'] == '' : 
-        dict_warning['ID #1 - Dispositivo']= 'Etapa 14'
+        dict_warning['ID #1 - Dispositivo']= 'Etapa 13'
     if dados['dis_id2_14'] == '' : 
-        dict_warning['ID #2 - Dispositivo']= 'Etapa 14'
+        dict_warning['ID #2 - Dispositivo']= 'Etapa 13'
 
     if condicao  == False:
-        dict_warning['Data Final anterior a Data Inicial']= 'Etapa 10'  
+        dict_warning['Data Final anterior a Data Inicial']= 'Etapa 9'  
 
     return dict_warning
 

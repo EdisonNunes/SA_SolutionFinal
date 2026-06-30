@@ -535,7 +535,9 @@ def incluir_registro(dados):
     supabase.table("sasdata60").insert(dados).execute()
 
 def alterar_registro(id, dados):
-    supabase.table("sasdata60").update(dados).eq("id", id).execute()
+    dados_atualizados = dict(dados)
+    dados_atualizados.pop("id", None)
+    supabase.table("sasdata60").update(dados_atualizados).eq("id", id).execute()
 
 def excluir_registro(id):
     supabase.table("sasdata60").delete().eq("id", id).execute()    

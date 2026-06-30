@@ -80,6 +80,10 @@ def formulario_padrao(dados=None, combo_clientes=None):
     with container1:
         # Buscar propostas com status "Agendado"
         propostas = supabase.table("propostas").select("*").eq("status_rel_01", "Agendado").execute().data
+        propostas_por_id = {proposta["id_proposta"]: proposta for proposta in propostas}
+
+        if "formulario_padrao_id_proposta" not in st.session_state and dados and dados.get("id_proposta"):
+            st.session_state["formulario_padrao_id_proposta"] = dados["id_proposta"]
 
         # Se estivermos alterando um relatório já existente, verificar se a proposta vinculada
         # no registro original ainda está com status 'Agendado'. Se não, bloquear edição.
@@ -93,18 +97,29 @@ def formulario_padrao(dados=None, combo_clientes=None):
             st.warning("⚠️ Nenhuma proposta com status 'Agendado' encontrada.")
             st.stop()
         
+        lista_ids_propostas = [proposta["id_proposta"] for proposta in propostas]
+        id_proposta_padrao = st.session_state.get("formulario_padrao_id_proposta")
+        if id_proposta_padrao not in propostas_por_id:
+            id_proposta_padrao = dados.get("id_proposta") if dados and dados.get("id_proposta") in propostas_por_id else lista_ids_propostas[0]
+            st.session_state["formulario_padrao_id_proposta"] = id_proposta_padrao
+
+        indice_padrao = lista_ids_propostas.index(id_proposta_padrao)
+
         # Selectbox para escolher a proposta
-        proposta_selecionada = st.selectbox(
+        id_proposta_selecionada = st.selectbox(
             "Selecione a Proposta",
-            propostas,
-            format_func=lambda x: f"{x['num_proposta']}  👉  {x['empresa']}",
-            key="formulario_padrao_proposta"
+            lista_ids_propostas,
+            index=indice_padrao,
+            format_func=lambda id_proposta: f"{propostas_por_id[id_proposta]['num_proposta']}  👉  {propostas_por_id[id_proposta]['empresa']}",
+            key="formulario_padrao_id_proposta"
         )
-        # print(proposta_selecionada)
+        proposta_selecionada = propostas_por_id[id_proposta_selecionada]
+
         id_proposta = proposta_selecionada["id_proposta"]
         num_proposta = proposta_selecionada["num_proposta"]
         nome_empresa = proposta_selecionada["empresa"]
         id_cliente = proposta_selecionada.get("id_cliente", None)
+        print(f"Proposta selecionada: {num_proposta}, Empresa: {nome_empresa}, ID Cliente: {id_cliente}")
         
         # Exibir dados do cliente de forma desabilitada
         st.write("**Dados do Cliente:**")
@@ -248,35 +263,43 @@ def formulario_padrao(dados=None, combo_clientes=None):
             col1, col2 = st.columns(2)
             with col1:
                 ckl_ponto_04 = st.radio('Ponto de Ar Comprimido Regulado e com Tubo de 6mm?', 
-                                        options=opcoes_ckl, index=idx_ckl_ponto_04,  horizontal=True)
+                                        options=opcoes_ckl, index=idx_ckl_ponto_04,  horizontal=True,
+                                        key="formulario_padrao_ckl_ponto_04")
                 ckl_espaco_04 = st.radio('Espaço da bancada: pelo menos 2000mm x 800mm', 
-                                        options=opcoes_ckl, index=idx_ckl_espaco_04, horizontal=True)
+                                        options=opcoes_ckl, index=idx_ckl_espaco_04, horizontal=True,
+                                        key="formulario_padrao_ckl_espaco_04")
                 ckl_tomada_04 = st.radio('3 Tomadas padrão Nacional NBR14136',
-                                        options=opcoes_ckl, index=idx_ckl_tomada_04, horizontal=True)
+                                        options=opcoes_ckl, index=idx_ckl_tomada_04, horizontal=True,
+                                        key="formulario_padrao_ckl_tomada_04")
                 ckl_balan_04 = st.radio('Estabilizador de Balança', 
-                                        options=opcoes_ckl, index=idx_ckl_balan_04,  horizontal=True)
+                                        options=opcoes_ckl, index=idx_ckl_balan_04,  horizontal=True,
+                                        key="formulario_padrao_ckl_balan_04")
             with col2:    
                 ckl_agua_04 = st.radio('10L de água purificada (WFI) a temperatura ambiente (23-25ºC)', 
-                                        options=opcoes_ckl, index=idx_ckl_agua_04,  horizontal=True)
+                                        options=opcoes_ckl, index=idx_ckl_agua_04,  horizontal=True,
+                                        key="formulario_padrao_ckl_agua_04")
                 ckl_conex_04 = st.radio('Tubulações e conexões triclamps de 1" e ½"', 
-                                        options=opcoes_ckl, index=idx_ckl_conex_04, horizontal=True)
+                                        options=opcoes_ckl, index=idx_ckl_conex_04, horizontal=True,
+                                        key="formulario_padrao_ckl_conex_04")
                 ckl_veda_04 = st.radio('Abraçadeiras e vedações triclamps', 
-                                        options=opcoes_ckl, index=idx_ckl_veda_04,  horizontal=True)
+                                        options=opcoes_ckl, index=idx_ckl_veda_04,  horizontal=True,
+                                        key="formulario_padrao_ckl_veda_04")
                 ckl_freez_04 = st.radio('Geladeira/Freezer ou Estufas', 
-                                        options=opcoes_ckl, index=idx_ckl_freez_04, horizontal=True)
+                                        options=opcoes_ckl, index=idx_ckl_freez_04, horizontal=True,
+                                        key="formulario_padrao_ckl_freez_04")
 
             coment_04  = st.text_area('Comentários Checklist:', value= dados.get("coment_04", "") if dados else "")
     else:
         # Valores padrão para local_realizacao_01 != "Externo"
-        local_teste_03 = ""
-        pessoa_local_03 = ""
-        dt_chegada_03 = ""
-        hr_chegada_03 = ""
-        setor_03 = ""
-        cargo_03 = ""
-        id_sala_03 = ""
+        local_teste_03 = "Laboratório Interno"
+        pessoa_local_03 = "Leandro"
+        dt_chegada_03 = "01-01-2026"
+        hr_chegada_03 = "08:00"
+        setor_03 = "Setor Interno"
+        cargo_03 = "Cargo Interno"
+        id_sala_03 = "Sala Interna"
         pedido_03 = ""
-        coment_03 = ""
+        coment_03 = "OK"
         valor_ckl_ponto_04  = 'Não OK'
         valor_ckl_espaco_04 = 'Não OK'
         valor_ckl_tomada_04 = 'Não OK'
@@ -304,7 +327,7 @@ def formulario_padrao(dados=None, combo_clientes=None):
         idx_ckl_veda_04   = 1
         idx_ckl_freez_04  = 1
         
-        coment_04  = ""
+        coment_04  = "OK"
 
 
     ################## Etapa 4 - Checklist do local  ##################
@@ -318,7 +341,7 @@ def formulario_padrao(dados=None, combo_clientes=None):
         except:
             valor_tipo_gas_05 = 'Ar Comprimido'
 
-        idx_tipo_gas_05  = opcoes_ckl.index(valor_tipo_gas_05)  if opcoes_ckl in opcoes_ckl  else 1     
+        idx_tipo_gas_05  = opcoes_gas.index(valor_tipo_gas_05) if valor_tipo_gas_05 in opcoes_gas else 1     
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -346,7 +369,8 @@ def formulario_padrao(dados=None, combo_clientes=None):
             armaz_05 = st.text_input('Armazenagem Local:',max_chars= 20, value=dados.get("armaz_05", "") if dados else "")  
             umidade_05 = st.text_input('Umidade (%):',max_chars= 20, value=dados.get("umidade_05", "") if dados else "") 
             volume_05 = st.text_input('Volume:', max_chars= 12, value=dados.get("volume_05", "") if dados else "")   
-            tipo_gas_05 = st.radio('Tipo de gás exigido', options=opcoes_gas, index=idx_tipo_gas_05) 
+            tipo_gas_05 = st.radio('Tipo de gás exigido', options=opcoes_gas, index=idx_tipo_gas_05,
+                                   key="formulario_padrao_tipo_gas_05") 
 
     ################## Etapa 5 - Lote / Catálogo / Serial  ##################
     st.markdown(':orange-background[Etapa 5 - Lote / Catálogo / Serial]')
@@ -417,9 +441,11 @@ def formulario_padrao(dados=None, combo_clientes=None):
     with container8:
         col1, col2 = st.columns(2)
         with col1:
-            ckl_mat_08 = st.radio('Incompatibilidade do produto / material', options=opcoes_mat, index=idx_mat)
+            ckl_mat_08 = st.radio('Incompatibilidade do produto / material', options=opcoes_mat, index=idx_mat,
+                                  key="formulario_padrao_ckl_mat_08")
         with col2:    
-            ckl_sens_08 = st.radio('Sensibilidade do Produto', options=opcoes_sens, index=idx_sens)
+            ckl_sens_08 = st.radio('Sensibilidade do Produto', options=opcoes_sens, index=idx_sens,
+                                   key="formulario_padrao_ckl_sens_08")
 
         estab_08 = st.text_input('Estabilidade do Produto:',  max_chars= 50, value= dados.get("estab_08", "") if dados else "")
 
@@ -652,7 +678,7 @@ def formulario_padrao(dados=None, combo_clientes=None):
     
     return {
         'id_proposta': id_proposta,
-        'num_proposta': num_proposta,
+        # 'num_proposta': num_proposta,
         'relatorio': relatorio.strip(),
         'status_rel_01': status_rel_01.strip(),
         'dt_agendada_01': dt_agendada_01.strip() if dt_agendada_01 is not None else None, #### dt_agendada_01.strip(),
