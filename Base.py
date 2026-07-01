@@ -82,8 +82,18 @@ def formulario_padrao(dados=None, combo_clientes=None):
         propostas = supabase.table("propostas").select("*").eq("status_rel_01", "Agendado").execute().data
         propostas_por_id = {proposta["id_proposta"]: proposta for proposta in propostas}
 
-        if "formulario_padrao_id_proposta" not in st.session_state and dados and dados.get("id_proposta"):
-            st.session_state["formulario_padrao_id_proposta"] = dados["id_proposta"]
+        if dados and dados.get("id_proposta"):
+            id_registro = dados.get("id")
+            id_proposta_dados = dados.get("id_proposta")
+            id_registro_state = st.session_state.get("formulario_padrao_registro_id")
+
+            # Quando mudar o relatório selecionado para edição, alinhar o selectbox
+            # com a proposta vinculada ao registro da sasdata60.
+            if id_registro_state != id_registro:
+                st.session_state["formulario_padrao_registro_id"] = id_registro
+                st.session_state["formulario_padrao_id_proposta"] = id_proposta_dados
+            elif "formulario_padrao_id_proposta" not in st.session_state:
+                st.session_state["formulario_padrao_id_proposta"] = id_proposta_dados
 
         # Se estivermos alterando um relatório já existente, verificar se a proposta vinculada
         # no registro original ainda está com status 'Agendado'. Se não, bloquear edição.
@@ -103,13 +113,10 @@ def formulario_padrao(dados=None, combo_clientes=None):
             id_proposta_padrao = dados.get("id_proposta") if dados and dados.get("id_proposta") in propostas_por_id else lista_ids_propostas[0]
             st.session_state["formulario_padrao_id_proposta"] = id_proposta_padrao
 
-        indice_padrao = lista_ids_propostas.index(id_proposta_padrao)
-
         # Selectbox para escolher a proposta
         id_proposta_selecionada = st.selectbox(
             "Selecione a Proposta",
             lista_ids_propostas,
-            index=indice_padrao,
             format_func=lambda id_proposta: f"{propostas_por_id[id_proposta]['num_proposta']}  👉  {propostas_por_id[id_proposta]['empresa']}",
             key="formulario_padrao_id_proposta"
         )
@@ -119,7 +126,7 @@ def formulario_padrao(dados=None, combo_clientes=None):
         num_proposta = proposta_selecionada["num_proposta"]
         nome_empresa = proposta_selecionada["empresa"]
         id_cliente = proposta_selecionada.get("id_cliente", None)
-        print(f"Proposta selecionada: {num_proposta}, Empresa: {nome_empresa}, ID Cliente: {id_cliente}")
+        # print(f"Proposta selecionada: {num_proposta}, Empresa: {nome_empresa}, ID Cliente: {id_cliente}")
         
         # Exibir dados do cliente de forma desabilitada
         st.write("**Dados do Cliente:**")
